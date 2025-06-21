@@ -3,6 +3,23 @@ from PyQt6.QtWidgets import QGroupBox, QHBoxLayout, QPushButton, QVBoxLayout
 
 def create_crop_group(main_window):
     crop_group = QGroupBox("Crop Controls")
+    crop_group.setStyleSheet(
+        """
+        QGroupBox {
+            font-weight: bold;
+            color: #ffffff;
+            border: 2px solid #404040;
+            border-radius: 8px;
+            margin-top: 10px;
+            padding-top: 10px;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin;
+            left: 10px;
+            padding: 0 5px 0 5px;
+        }
+    """
+    )
     crop_layout = QVBoxLayout()
 
     # Crop mode toggle and apply crop buttons in horizontal layout
@@ -13,11 +30,12 @@ def create_crop_group(main_window):
         """
         QPushButton {
             font-size: 14px;
-            padding: 8px 16px;
+            padding: 10px 20px;
             background-color: #FF9800;
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
+            font-weight: bold;
         }
         QPushButton:hover {
             background-color: #F57C00;
@@ -26,8 +44,8 @@ def create_crop_group(main_window):
             background-color: #E65100;
         }
         QPushButton:disabled {
-            background-color: #ccc;
-            color: #666;
+            background-color: #555;
+            color: #888;
         }
         """
     )
@@ -39,18 +57,22 @@ def create_crop_group(main_window):
         """
         QPushButton {
             font-size: 14px;
-            padding: 8px 16px;
+            padding: 10px 20px;
             background-color: #4CAF50;
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
+            font-weight: bold;
         }
         QPushButton:hover {
             background-color: #45a049;
         }
+        QPushButton:pressed {
+            background-color: #3d8b40;
+        }
         QPushButton:disabled {
-            background-color: #ccc;
-            color: #666;
+            background-color: #555;
+            color: #888;
         }
         """
     )

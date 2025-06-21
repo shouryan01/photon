@@ -55,11 +55,19 @@ class MainWindow(QWidget):
         self.crop_rect = None
         self.cropped_image = None
 
+        # Window dragging
+        self.dragging = False
+        self.drag_position = QPoint()
+
         self.initializeUI()
 
     def initializeUI(self):
         self.setWindowTitle("Photon")
         self.setGeometry(200, 200, 1200, 800)
+
+        # Make window frameless
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
         # Center the window on the screen
         screen = QApplication.primaryScreen().geometry()
@@ -67,7 +75,42 @@ class MainWindow(QWidget):
         y = (screen.height() - 800) // 2
         self.setGeometry(x, y, 1200, 800)
 
-        main_layout = QHBoxLayout()
+        # Main container with background
+        main_container = QWidget()
+        main_container.setObjectName("mainContainer")
+        main_container.setStyleSheet(
+            """
+            #mainContainer {
+                background-color: #2b2b2b;
+                border-radius: 10px;
+                border: 1px solid #404040;
+            }
+        """
+        )
+
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # Title bar
+        title_bar = self.createTitleBar()
+        main_layout.addWidget(title_bar)
+
+        # Content area
+        content_widget = QWidget()
+        content_widget.setObjectName("contentWidget")
+        content_widget.setStyleSheet(
+            """
+            #contentWidget {
+                background-color: #2b2b2b;
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
+            }
+        """
+        )
+
+        content_layout = QHBoxLayout()
+        content_layout.setContentsMargins(20, 20, 20, 20)
 
         # Left panel for controls
         left_panel = QVBoxLayout()
@@ -78,14 +121,18 @@ class MainWindow(QWidget):
             """
             QPushButton {
                 font-size: 16px;
-                padding: 10px 20px;
+                padding: 12px 24px;
                 background-color: #4CAF50;
                 color: white;
                 border: none;
-                border-radius: 5px;
+                border-radius: 8px;
+                font-weight: bold;
             }
             QPushButton:hover {
                 background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
             }
             """
         )
@@ -97,18 +144,22 @@ class MainWindow(QWidget):
             """
             QPushButton {
                 font-size: 16px;
-                padding: 10px 20px;
+                padding: 12px 24px;
                 background-color: #2196F3;
                 color: white;
                 border: none;
-                border-radius: 5px;
+                border-radius: 8px;
+                font-weight: bold;
             }
             QPushButton:hover {
                 background-color: #1976D2;
             }
+            QPushButton:pressed {
+                background-color: #1565C0;
+            }
             QPushButton:disabled {
-                background-color: #ccc;
-                color: #666;
+                background-color: #555;
+                color: #888;
             }
             """
         )
@@ -117,10 +168,29 @@ class MainWindow(QWidget):
 
         # Border color controls
         color_group = QGroupBox("Border Color")
+        color_group.setStyleSheet(
+            """
+            QGroupBox {
+                font-weight: bold;
+                color: #ffffff;
+                border: 2px solid #404040;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """
+        )
         color_layout = QHBoxLayout()
 
         self.border_color_label = QLabel("Color:")
-        self.border_color_label.setStyleSheet("font-weight: bold; margin: 5px;")
+        self.border_color_label.setStyleSheet(
+            "font-weight: bold; margin: 5px; color: #ffffff;"
+        )
 
         self.color_button = QPushButton("")
         self.color_button.setFixedSize(40, 30)
@@ -128,18 +198,18 @@ class MainWindow(QWidget):
             """
             QPushButton {
                 background-color: white;
-                border: 2px solid #ccc;
-                border-radius: 5px;
+                border: 2px solid #555;
+                border-radius: 6px;
             }
             QPushButton:hover {
-                border: 2px solid #999;
+                border: 2px solid #777;
             }
         """
         )
         self.color_button.clicked.connect(self.pickColor)
 
         self.color_name_label = QLabel("White")
-        self.color_name_label.setStyleSheet("margin: 5px;")
+        self.color_name_label.setStyleSheet("margin: 5px; color: #ffffff;")
 
         color_layout.addWidget(self.border_color_label)
         color_layout.addWidget(self.color_button)
@@ -174,9 +244,9 @@ class MainWindow(QWidget):
         self.image_widget.setStyleSheet(
             """
             QLabel {
-                border: 2px dashed #ccc;
-                border-radius: 5px;
-                background-color: transparent;
+                border: 2px dashed #555;
+                border-radius: 8px;
+                background-color: #1e1e1e;
             }
         """
         )
@@ -190,11 +260,148 @@ class MainWindow(QWidget):
 
         right_panel.addWidget(self.image_widget)
 
-        # Add panels to main layout
-        main_layout.addLayout(left_panel, 1)
-        main_layout.addLayout(right_panel, 2)
+        # Add panels to content layout
+        content_layout.addLayout(left_panel, 1)
+        content_layout.addLayout(right_panel, 2)
 
-        self.setLayout(main_layout)
+        content_widget.setLayout(content_layout)
+        main_layout.addWidget(content_widget)
+
+        main_container.setLayout(main_layout)
+
+        # Set the main container as the central widget
+        container_layout = QVBoxLayout()
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.addWidget(main_container)
+        self.setLayout(container_layout)
+
+    def createTitleBar(self):
+        title_bar = QWidget()
+        title_bar.setObjectName("titleBar")
+        title_bar.setFixedHeight(40)
+        title_bar.setStyleSheet(
+            """
+            #titleBar {
+                background-color: #1e1e1e;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+                border-bottom: 1px solid #404040;
+            }
+        """
+        )
+
+        title_layout = QHBoxLayout()
+        title_layout.setContentsMargins(15, 0, 15, 0)
+
+        # App title
+        title_label = QLabel("Photon")
+        title_label.setStyleSheet(
+            """
+            color: #ffffff;
+            font-size: 16px;
+            font-weight: bold;
+        """
+        )
+
+        # Window controls
+        controls_layout = QHBoxLayout()
+        controls_layout.setSpacing(8)
+
+        # Minimize button
+        minimize_btn = QPushButton("−")
+        minimize_btn.setFixedSize(20, 20)
+        minimize_btn.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #404040;
+                color: #ffffff;
+                border: none;
+                border-radius: 10px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #505050;
+            }
+        """
+        )
+        minimize_btn.clicked.connect(self.showMinimized)
+
+        # Maximize button
+        self.maximize_btn = QPushButton("□")
+        self.maximize_btn.setFixedSize(20, 20)
+        self.maximize_btn.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #404040;
+                color: #ffffff;
+                border: none;
+                border-radius: 10px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #505050;
+            }
+        """
+        )
+        self.maximize_btn.clicked.connect(self.toggleMaximize)
+
+        # Close button
+        close_btn = QPushButton("×")
+        close_btn.setFixedSize(20, 20)
+        close_btn.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #e81123;
+                color: #ffffff;
+                border: none;
+                border-radius: 10px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #f1707a;
+            }
+        """
+        )
+        close_btn.clicked.connect(self.close)
+
+        controls_layout.addWidget(minimize_btn)
+        controls_layout.addWidget(self.maximize_btn)
+        controls_layout.addWidget(close_btn)
+
+        title_layout.addWidget(title_label)
+        title_layout.addStretch()
+        title_layout.addLayout(controls_layout)
+
+        title_bar.setLayout(title_layout)
+        return title_bar
+
+    def toggleMaximize(self):
+        if self.isMaximized():
+            self.showNormal()
+            self.maximize_btn.setText("□")
+        else:
+            self.showMaximized()
+            self.maximize_btn.setText("❐")
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.dragging = True
+            self.drag_position = (
+                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            )
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.MouseButton.LeftButton and self.dragging:
+            self.move(event.globalPosition().toPoint() - self.drag_position)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.dragging = False
 
     def onSliderChanged(self):
         # Update border values from sliders
@@ -253,11 +460,11 @@ class MainWindow(QWidget):
                 f"""
                 QPushButton {{
                     background-color: {color.name()};
-                    border: 2px solid #ccc;
-                    border-radius: 5px;
+                    border: 2px solid #555;
+                    border-radius: 6px;
                 }}
                 QPushButton:hover {{
-                    border: 2px solid #999;
+                    border: 2px solid #777;
                 }}
             """
             )
@@ -428,11 +635,11 @@ class MainWindow(QWidget):
                 f"""
                 QPushButton {{
                     background-color: {color.name()};
-                    border: 2px solid #ccc;
-                    border-radius: 5px;
+                    border: 2px solid #555;
+                    border-radius: 6px;
                 }}
                 QPushButton:hover {{
-                    border: 2px solid #999;
+                    border: 2px solid #777;
                 }}
             """
             )
