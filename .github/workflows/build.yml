@@ -40,22 +40,25 @@ jobs:
           # The --name flag sets the name of the output executable.
           # The --windowed flag (for GUI apps on Windows/macOS) prevents a console window from appearing.
 
-          # For Windows, use PowerShell syntax for the if statement.
-          # Access environment variables with $env:
+          # GitHub Actions sets RUNNER_OS environment variable automatically.
+          # Use different shell syntax for Windows (PowerShell) vs. Linux/macOS (Bash).
+          # For Windows, $env:RUNNER_OS is used. For Bash, $RUNNER_OS is used.
+
+          # If the current runner is Windows
           if ($env:RUNNER_OS -eq "Windows") {
             pyinstaller --noconfirm --onefile --windowed --name "photon" main.py
           }
-          # For macOS, use PowerShell syntax for the if statement.
+          # If the current runner is macOS
           elif ($env:RUNNER_OS -eq "macOS") {
             pyinstaller --noconfirm --onefile --windowed --name "photon" main.py
           }
-          # For Linux (ubuntu-latest), use standard shell syntax.
+          # Otherwise (Linux)
           else {
             pyinstaller --noconfirm --onefile --name "photon" main.py
           }
-        # Specify the shell for this step. For Windows, we explicitly use pwsh.
-        # For other OS, the default shell (bash) is fine.
-        shell: ${{ contains(matrix.os, 'windows') && 'pwsh' || 'bash' }}
+        # Explicitly set the shell for Windows runners to PowerShell.
+        # For Ubuntu and macOS, the default shell (bash) is suitable.
+        shell: ${{ matrix.os == 'windows-latest' && 'pwsh' || 'bash' }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
