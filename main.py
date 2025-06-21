@@ -113,7 +113,10 @@ class MainWindow(QWidget):
         content_layout.setContentsMargins(20, 20, 20, 20)
 
         # Left panel for controls
+        left_panel_widget = QWidget()
+        left_panel_widget.setFixedWidth(350)  # Fixed width for left panel
         left_panel = QVBoxLayout()
+        left_panel.setContentsMargins(0, 0, 0, 0)
 
         # Image picker button
         self.pick_button = QPushButton("Pick Image", self)
@@ -235,12 +238,14 @@ class MainWindow(QWidget):
         left_panel.addWidget(crop_group)
         left_panel.addStretch()
 
+        left_panel_widget.setLayout(left_panel)
+
         # Right panel for image display
         right_panel = QVBoxLayout()
 
-        # Image display widget with fixed size
+        # Image display widget - now resizable
         self.image_widget = QLabel()
-        self.image_widget.setFixedSize(600, 400)  # Fixed display size
+        self.image_widget.setMinimumSize(400, 300)  # Minimum size instead of fixed
         self.image_widget.setStyleSheet(
             """
             QLabel {
@@ -258,11 +263,14 @@ class MainWindow(QWidget):
         self.image_widget.mouseMoveEvent = self.imageMouseMoveEvent
         self.image_widget.mouseReleaseEvent = self.imageMouseReleaseEvent
 
+        # Connect resize event to update image
+        self.image_widget.resizeEvent = self.imageResizeEvent
+
         right_panel.addWidget(self.image_widget)
 
         # Add panels to content layout
-        content_layout.addLayout(left_panel, 1)
-        content_layout.addLayout(right_panel, 2)
+        content_layout.addWidget(left_panel_widget)  # Fixed width widget
+        content_layout.addLayout(right_panel, 1)  # Stretch factor for right panel
 
         content_widget.setLayout(content_layout)
         main_layout.addWidget(content_widget)
@@ -289,6 +297,11 @@ class MainWindow(QWidget):
             }
         """
         )
+
+        # Add mouse event handlers to title bar for dragging
+        title_bar.mousePressEvent = self.titleBarMousePressEvent
+        title_bar.mouseMoveEvent = self.titleBarMouseMoveEvent
+        title_bar.mouseReleaseEvent = self.titleBarMouseReleaseEvent
 
         title_layout = QHBoxLayout()
         title_layout.setContentsMargins(15, 0, 15, 0)
@@ -386,7 +399,7 @@ class MainWindow(QWidget):
             self.showMaximized()
             self.maximize_btn.setText("❐")
 
-    def mousePressEvent(self, event):
+    def titleBarMousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.dragging = True
             self.drag_position = (
@@ -394,12 +407,12 @@ class MainWindow(QWidget):
             )
             event.accept()
 
-    def mouseMoveEvent(self, event):
+    def titleBarMouseMoveEvent(self, event):
         if event.buttons() == Qt.MouseButton.LeftButton and self.dragging:
             self.move(event.globalPosition().toPoint() - self.drag_position)
             event.accept()
 
-    def mouseReleaseEvent(self, event):
+    def titleBarMouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.dragging = False
 
@@ -420,34 +433,28 @@ class MainWindow(QWidget):
         self.updateBorder()
 
     def onTextChanged(self):
-        try:
-            # Update border values from text boxes
-            self.top_border = int(self.top_text_box.text() or 0)
-            self.bottom_border = int(self.bottom_text_box.text() or 0)
-            self.left_border = int(self.left_text_box.text() or 0)
-            self.right_border = int(self.right_text_box.text() or 0)
+        # Update border values from text boxes
+        self.top_border = int(self.top_text_box.text() or 0)
+        self.bottom_border = int(self.bottom_text_box.text() or 0)
+        self.left_border = int(self.left_text_box.text() or 0)
+        self.right_border = int(self.right_text_box.text() or 0)
 
-            # Clamp values to slider ranges
-            self.top_border = max(0, min(self.top_border, self.top_slider.maximum()))
-            self.bottom_border = max(
-                0, min(self.bottom_border, self.bottom_slider.maximum())
-            )
-            self.left_border = max(0, min(self.left_border, self.left_slider.maximum()))
-            self.right_border = max(
-                0, min(self.right_border, self.right_slider.maximum())
-            )
+        # Clamp values to slider ranges
+        self.top_border = max(0, min(self.top_border, self.top_slider.maximum()))
+        self.bottom_border = max(
+            0, min(self.bottom_border, self.bottom_slider.maximum())
+        )
+        self.left_border = max(0, min(self.left_border, self.left_slider.maximum()))
+        self.right_border = max(0, min(self.right_border, self.right_slider.maximum()))
 
-            # Update sliders
-            self.top_slider.setValue(self.top_border)
-            self.bottom_slider.setValue(self.bottom_border)
-            self.left_slider.setValue(self.left_border)
-            self.right_slider.setValue(self.right_border)
+        # Update sliders
+        self.top_slider.setValue(self.top_border)
+        self.bottom_slider.setValue(self.bottom_border)
+        self.left_slider.setValue(self.left_border)
+        self.right_slider.setValue(self.right_border)
 
-            # Update the image display
-            self.updateBorder()
-        except ValueError:
-            # If invalid input, ignore the change
-            pass
+        # Update the image display
+        self.updateBorder()
 
     def pickColor(self):
         color = QColorDialog.getColor()
@@ -493,6 +500,28 @@ class MainWindow(QWidget):
         self.current_image_path = image_path
         self.download_button.setEnabled(True)  # Enable download button
         self.crop_button.setEnabled(True)  # Enable crop button
+
+        # Update crop button styling to match "Enter Crop Mode" state
+        self.crop_button.setText("Enter Crop Mode")
+        self.crop_button.setStyleSheet(
+            """
+            QPushButton {
+                font-size: 14px;
+                padding: 8px 16px;
+                background-color: #FF9800;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #F57C00;
+            }
+            QPushButton:pressed {
+                background-color: #E65100;
+            }
+            """
+        )
+
         self.updateBorder()
 
     def updateBorder(self):
@@ -589,7 +618,7 @@ class MainWindow(QWidget):
 
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Save Border Settings",
+            "Save Settings",
             "",
             "JSON Files (*.json);;All Files (*)",
         )
@@ -601,7 +630,7 @@ class MainWindow(QWidget):
     def loadBorderSettings(self):
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Load Border Settings",
+            "Load Settings",
             "",
             "JSON Files (*.json);;All Files (*)",
         )
@@ -832,6 +861,9 @@ class MainWindow(QWidget):
         self.crop_end = None
         self.crop_rect = None
         self.apply_crop_button.setEnabled(False)
+        self.updateBorder()
+
+    def imageResizeEvent(self, event):
         self.updateBorder()
 
 

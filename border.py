@@ -1,4 +1,5 @@
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIntValidator
 from PyQt6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
@@ -34,8 +35,8 @@ def create_border_group(main_window):
     # Top border slider
     top_layout = QHBoxLayout()
     top_label = QLabel("Top:")
-    top_label.setFixedWidth(40)
-    top_label.setStyleSheet("color: #ffffff; font-weight: bold;")
+    top_label.setFixedWidth(50)
+    top_label.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 12px;")
     main_window.top_slider = QSlider(Qt.Orientation.Horizontal)
     main_window.top_slider.setRange(0, 500)
     main_window.top_slider.setValue(0)
@@ -61,7 +62,8 @@ def create_border_group(main_window):
     )
     main_window.top_slider.valueChanged.connect(main_window.onSliderChanged)
     main_window.top_text_box = QLineEdit("0")
-    main_window.top_text_box.setFixedWidth(50)
+    main_window.top_text_box.setValidator(QIntValidator(0, 500))
+    main_window.top_text_box.setFixedWidth(60)
     main_window.top_text_box.setStyleSheet(
         """
         QLineEdit {
@@ -84,8 +86,8 @@ def create_border_group(main_window):
     # Bottom border slider
     bottom_layout = QHBoxLayout()
     bottom_label = QLabel("Bottom:")
-    bottom_label.setFixedWidth(40)
-    bottom_label.setStyleSheet("color: #ffffff; font-weight: bold;")
+    bottom_label.setFixedWidth(50)
+    bottom_label.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 12px;")
     main_window.bottom_slider = QSlider(Qt.Orientation.Horizontal)
     main_window.bottom_slider.setRange(0, 500)
     main_window.bottom_slider.setValue(0)
@@ -111,7 +113,8 @@ def create_border_group(main_window):
     )
     main_window.bottom_slider.valueChanged.connect(main_window.onSliderChanged)
     main_window.bottom_text_box = QLineEdit("0")
-    main_window.bottom_text_box.setFixedWidth(50)
+    main_window.bottom_text_box.setValidator(QIntValidator(0, 500))
+    main_window.bottom_text_box.setFixedWidth(60)
     main_window.bottom_text_box.setStyleSheet(
         """
         QLineEdit {
@@ -134,8 +137,8 @@ def create_border_group(main_window):
     # Left border slider
     left_layout = QHBoxLayout()
     left_label = QLabel("Left:")
-    left_label.setFixedWidth(40)
-    left_label.setStyleSheet("color: #ffffff; font-weight: bold;")
+    left_label.setFixedWidth(50)
+    left_label.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 12px;")
     main_window.left_slider = QSlider(Qt.Orientation.Horizontal)
     main_window.left_slider.setRange(0, 500)
     main_window.left_slider.setValue(0)
@@ -161,7 +164,8 @@ def create_border_group(main_window):
     )
     main_window.left_slider.valueChanged.connect(main_window.onSliderChanged)
     main_window.left_text_box = QLineEdit("0")
-    main_window.left_text_box.setFixedWidth(50)
+    main_window.left_text_box.setValidator(QIntValidator(0, 500))
+    main_window.left_text_box.setFixedWidth(60)
     main_window.left_text_box.setStyleSheet(
         """
         QLineEdit {
@@ -184,8 +188,8 @@ def create_border_group(main_window):
     # Right border slider
     right_layout = QHBoxLayout()
     right_label = QLabel("Right:")
-    right_label.setFixedWidth(40)
-    right_label.setStyleSheet("color: #ffffff; font-weight: bold;")
+    right_label.setFixedWidth(50)
+    right_label.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 12px;")
     main_window.right_slider = QSlider(Qt.Orientation.Horizontal)
     main_window.right_slider.setRange(0, 500)
     main_window.right_slider.setValue(0)
@@ -211,7 +215,8 @@ def create_border_group(main_window):
     )
     main_window.right_slider.valueChanged.connect(main_window.onSliderChanged)
     main_window.right_text_box = QLineEdit("0")
-    main_window.right_text_box.setFixedWidth(50)
+    main_window.right_text_box.setValidator(QIntValidator(0, 500))
+    main_window.right_text_box.setFixedWidth(60)
     main_window.right_text_box.setStyleSheet(
         """
         QLineEdit {
@@ -237,13 +242,14 @@ def create_border_group(main_window):
     border_layout.addLayout(right_layout)
 
     # Add Save/Load buttons
-    settings_layout = QHBoxLayout()
-    save_button = QPushButton("Save Border Settings")
+    buttons_layout = QHBoxLayout()
+    save_button = QPushButton("Save Settings")
+    save_button.clicked.connect(main_window.saveBorderSettings)
     save_button.setStyleSheet(
         """
         QPushButton {
-            font-size: 14px;
-            padding: 8px 16px;
+            font-size: 12px;
+            padding: 10px 20px;
             background-color: #2196F3;
             color: white;
             border: none;
@@ -256,16 +262,15 @@ def create_border_group(main_window):
         QPushButton:pressed {
             background-color: #1565C0;
         }
-    """
+        """
     )
-    save_button.clicked.connect(main_window.saveBorderSettings)
-
-    load_button = QPushButton("Load Border Settings")
+    load_button = QPushButton("Load Settings")
+    load_button.clicked.connect(main_window.loadBorderSettings)
     load_button.setStyleSheet(
         """
         QPushButton {
-            font-size: 14px;
-            padding: 8px 16px;
+            font-size: 12px;
+            padding: 10px 20px;
             background-color: #FF9800;
             color: white;
             border: none;
@@ -278,13 +283,13 @@ def create_border_group(main_window):
         QPushButton:pressed {
             background-color: #E65100;
         }
-    """
+        """
     )
-    load_button.clicked.connect(main_window.loadBorderSettings)
+    buttons_layout.addWidget(save_button)
+    buttons_layout.addSpacing(10)
+    buttons_layout.addWidget(load_button)
 
-    settings_layout.addWidget(save_button)
-    settings_layout.addWidget(load_button)
-    border_layout.addLayout(settings_layout)
+    border_layout.addLayout(buttons_layout)
 
     border_group.setLayout(border_layout)
 

@@ -31,20 +31,20 @@ def create_crop_group(main_window):
         QPushButton {
             font-size: 14px;
             padding: 10px 20px;
-            background-color: #FF9800;
+            background-color: #8b7a5a;
             color: white;
             border: none;
-            border-radius: 8px;
-            font-weight: bold;
+            border-radius: 4px;
+            font-weight: 500;
         }
         QPushButton:hover {
-            background-color: #F57C00;
+            background-color: #7a6a4a;
         }
         QPushButton:pressed {
-            background-color: #E65100;
+            background-color: #6a5a3a;
         }
         QPushButton:disabled {
-            background-color: #555;
+            background-color: #4a4a4a;
             color: #888;
         }
         """
@@ -58,20 +58,20 @@ def create_crop_group(main_window):
         QPushButton {
             font-size: 14px;
             padding: 10px 20px;
-            background-color: #4CAF50;
+            background-color: #5a6c7d;
             color: white;
             border: none;
-            border-radius: 8px;
-            font-weight: bold;
+            border-radius: 4px;
+            font-weight: 500;
         }
         QPushButton:hover {
-            background-color: #45a049;
+            background-color: #4a5a6a;
         }
         QPushButton:pressed {
-            background-color: #3d8b40;
+            background-color: #3a4a5a;
         }
         QPushButton:disabled {
-            background-color: #555;
+            background-color: #4a4a4a;
             color: #888;
         }
         """
