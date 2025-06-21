@@ -32,18 +32,31 @@ jobs:
 
       # 4. Build the executable with PyInstaller
       - name: Build with PyInstaller
+        # This step uses conditional logic based on the operating system
+        # to apply appropriate PyInstaller flags.
         run: |
-          # The --name flag sets the name of the output executable.
+          # The --noconfirm flag prevents PyInstaller from asking for confirmation.
           # The --onefile flag bundles everything into a single executable.
-          # The --noconsole flag (for Windows) prevents the console from appearing.
-          if [ "$RUNNER_OS" == "Windows" ]; then
+          # The --name flag sets the name of the output executable.
+          # The --windowed flag (for GUI apps on Windows/macOS) prevents a console window from appearing.
+
+          # For Windows, use PowerShell syntax for the if statement.
+          # Access environment variables with $env:
+          if ($env:RUNNER_OS -eq "Windows") {
             pyinstaller --noconfirm --onefile --windowed --name "photon" main.py
-          elif [ "$RUNNER_OS" == "macOS" ]; then
+          }
+          # For macOS, use PowerShell syntax for the if statement.
+          elif ($env:RUNNER_OS -eq "macOS") {
             pyinstaller --noconfirm --onefile --windowed --name "photon" main.py
-          else
+          }
+          # For Linux (ubuntu-latest), use standard shell syntax.
+          else {
             pyinstaller --noconfirm --onefile --name "photon" main.py
-          fi
-    
+          }
+        # Specify the shell for this step. For Windows, we explicitly use pwsh.
+        # For other OS, the default shell (bash) is fine.
+        shell: ${{ contains(matrix.os, 'windows') && 'pwsh' || 'bash' }}
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -74,7 +87,7 @@ jobs:
           tag_name: release-${{ env.TIMESTAMP }}
           name: "Release ${{ env.TIMESTAMP }}"
           body: "Automated release of executables."
-          prerelease: false 
+          prerelease: false
           files: |
             artifacts/executable-windows-latest/*
             artifacts/executable-macos-latest/*
