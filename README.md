@@ -18,3 +18,8 @@ Utilities for Photographers
 - EXIF data scrubber
 - Presets for crops
 - "Polaroid" preset images.
+
+## Screenshots
+
+<img width="1203" alt="image" src="https://github.com/user-attachments/assets/5c5f737c-2125-445e-80a1-8f315108b5f6" />
+
