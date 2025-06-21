@@ -11,7 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [macos-latest]
 
     steps:
       - name: Check out code
@@ -29,37 +29,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller
           pip install -r requirements.txt
-
       # 4. Build the executable with PyInstaller
       - name: Build with PyInstaller
-        # This step uses conditional logic based on the operating system
-        # to apply appropriate PyInstaller flags.
         run: |
-          # The --noconfirm flag prevents PyInstaller from asking for confirmation.
-          # The --onefile flag bundles everything into a single executable.
           # The --name flag sets the name of the output executable.
-          # The --windowed flag (for GUI apps on Windows/macOS) prevents a console window from appearing.
-
-          # GitHub Actions sets RUNNER_OS environment variable automatically.
-          # The shell used will be the default for the runner OS (pwsh for Windows, bash for Linux/macOS).
-          # The conditional logic within the script adapts to the shell's syntax.
-
-          # If the current runner is Windows (PowerShell syntax)
-          if ($env:RUNNER_OS -eq "Windows") {
+          # The --onefile flag bundles everything into a single executable.
+          # The --noconsole flag (for Windows) prevents the console from appearing.
+          if [ "$RUNNER_OS" == "Windows" ]; then
             pyinstaller --noconfirm --onefile --windowed --name "photon" main.py
-          }
-          # If the current runner is macOS (Bash syntax)
           elif [ "$RUNNER_OS" == "macOS" ]; then
             pyinstaller --noconfirm --onefile --windowed --name "photon" main.py
-          }
-          # Otherwise (Linux - Bash syntax)
-          else {
+          else
             pyinstaller --noconfirm --onefile --name "photon" main.py
-          }
-        # REMOVED: shell: ${{ matrix.os == 'windows-latest' && 'pwsh' || 'bash' }}
-        # The default shell for each runner (pwsh on Windows, bash on others)
-        # will automatically be used, which correctly executes the if/elif/else logic.
-
+          fi
+    
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -90,7 +73,7 @@ jobs:
           tag_name: release-${{ env.TIMESTAMP }}
           name: "Release ${{ env.TIMESTAMP }}"
           body: "Automated release of executables."
-          prerelease: false
+          prerelease: false 
           files: |
             artifacts/executable-windows-latest/*
             artifacts/executable-macos-latest/*
