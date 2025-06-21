@@ -25,8 +25,11 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
+    QProgressBar,
     QPushButton,
     QSlider,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -55,9 +58,18 @@ class MainWindow(QWidget):
         self.crop_rect = None
         self.cropped_image = None
 
+        # Batch processing values
+        self.batch_images = []
+        self.batch_output_dir = None
+        self.processing_batch = False
+
         # Window dragging
         self.dragging = False
         self.drag_position = QPoint()
+
+        # Tab management
+        self.current_tab = 0
+        self.tab_buttons = []
 
         self.initializeUI()
 
@@ -92,11 +104,38 @@ class MainWindow(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Title bar
+        # Title bar with tabs
         title_bar = self.createTitleBar()
         main_layout.addWidget(title_bar)
 
-        # Content area
+        # Stacked widget for tab content
+        self.stacked_widget = QStackedWidget()
+        self.stacked_widget.setObjectName("stackedWidget")
+        self.stacked_widget.setStyleSheet(
+            """
+            #stackedWidget {
+                background-color: #2b2b2b;
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
+            }
+        """
+        )
+
+        # Create tab content
+        self.createMainTab()
+        self.createHelloWorldTab()
+
+        main_layout.addWidget(self.stacked_widget)
+        main_container.setLayout(main_layout)
+
+        # Set the main container as the central widget
+        container_layout = QVBoxLayout()
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.addWidget(main_container)
+        self.setLayout(container_layout)
+
+    def createMainTab(self):
+        # Content area for main tab
         content_widget = QWidget()
         content_widget.setObjectName("contentWidget")
         content_widget.setStyleSheet(
@@ -226,6 +265,9 @@ class MainWindow(QWidget):
         # Crop controls
         crop_group = create_crop_group(self)
 
+        # Batch processing controls
+        batch_group = self.createBatchGroup()
+
         # Add controls to left panel
         # Create horizontal layout for buttons
         button_layout = QHBoxLayout()
@@ -236,6 +278,7 @@ class MainWindow(QWidget):
         left_panel.addWidget(color_group)
         left_panel.addWidget(border_group)
         left_panel.addWidget(crop_group)
+        left_panel.addWidget(batch_group)
         left_panel.addStretch()
 
         left_panel_widget.setLayout(left_panel)
@@ -273,20 +316,47 @@ class MainWindow(QWidget):
         content_layout.addLayout(right_panel, 1)  # Stretch factor for right panel
 
         content_widget.setLayout(content_layout)
-        main_layout.addWidget(content_widget)
+        self.stacked_widget.addWidget(content_widget)
 
-        main_container.setLayout(main_layout)
+    def createHelloWorldTab(self):
+        # Content area for Hello World tab
+        hello_widget = QWidget()
+        hello_widget.setObjectName("helloWidget")
+        hello_widget.setStyleSheet(
+            """
+            #helloWidget {
+                background-color: #2b2b2b;
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
+            }
+        """
+        )
 
-        # Set the main container as the central widget
-        container_layout = QVBoxLayout()
-        container_layout.setContentsMargins(0, 0, 0, 0)
-        container_layout.addWidget(main_container)
-        self.setLayout(container_layout)
+        hello_layout = QVBoxLayout()
+        hello_layout.setContentsMargins(20, 20, 20, 20)
+
+        # Hello World label
+        hello_label = QLabel("Hello World!")
+        hello_label.setStyleSheet(
+            """
+            color: #ffffff;
+            font-size: 48px;
+            font-weight: bold;
+            text-align: center;
+        """
+        )
+        hello_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        hello_layout.addWidget(hello_label)
+        hello_layout.addStretch()
+
+        hello_widget.setLayout(hello_layout)
+        self.stacked_widget.addWidget(hello_widget)
 
     def createTitleBar(self):
         title_bar = QWidget()
         title_bar.setObjectName("titleBar")
-        title_bar.setFixedHeight(40)
+        title_bar.setFixedHeight(40)  # Back to original height
         title_bar.setStyleSheet(
             """
             #titleBar {
@@ -315,6 +385,15 @@ class MainWindow(QWidget):
             font-weight: bold;
         """
         )
+
+        # Tab buttons in center
+        tab_layout = QHBoxLayout()
+        tab_layout.setSpacing(5)
+        tab_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Create tab buttons
+        self.createTabButton("Image Editor", 0, tab_layout)
+        self.createTabButton("Hello World", 1, tab_layout)
 
         # Window controls
         controls_layout = QHBoxLayout()
@@ -386,10 +465,58 @@ class MainWindow(QWidget):
 
         title_layout.addWidget(title_label)
         title_layout.addStretch()
+        title_layout.addLayout(tab_layout)
+        title_layout.addStretch()
         title_layout.addLayout(controls_layout)
 
         title_bar.setLayout(title_layout)
         return title_bar
+
+    def createTabButton(self, text, tab_index, layout):
+        tab_button = QPushButton(text)
+        tab_button.setFixedSize(120, 30)
+        tab_button.setCheckable(True)
+
+        # Set initial state
+        if tab_index == 0:
+            tab_button.setChecked(True)
+
+        tab_button.clicked.connect(lambda: self.switchTab(tab_index))
+
+        # Style the tab button
+        tab_button.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #404040;
+                color: #ffffff;
+                border: none;
+                border-radius: 5px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #505050;
+            }
+            QPushButton:checked {
+                background-color: #2196F3;
+            }
+            QPushButton:checked:hover {
+                background-color: #1976D2;
+            }
+        """
+        )
+
+        layout.addWidget(tab_button)
+        self.tab_buttons.append(tab_button)
+
+    def switchTab(self, tab_index):
+        # Update tab button states
+        for i, button in enumerate(self.tab_buttons):
+            button.setChecked(i == tab_index)
+
+        # Switch to the selected tab
+        self.current_tab = tab_index
+        self.stacked_widget.setCurrentIndex(tab_index)
 
     def toggleMaximize(self):
         if self.isMaximized():
@@ -646,6 +773,16 @@ class MainWindow(QWidget):
             self.right_border = settings.get("right_border", 0)
             self.border_color = settings.get("border_color", [255, 255, 255])
 
+            # Temporarily disconnect signals to prevent conflicts
+            self.top_slider.valueChanged.disconnect()
+            self.bottom_slider.valueChanged.disconnect()
+            self.left_slider.valueChanged.disconnect()
+            self.right_slider.valueChanged.disconnect()
+            self.top_text_box.textChanged.disconnect()
+            self.bottom_text_box.textChanged.disconnect()
+            self.left_text_box.textChanged.disconnect()
+            self.right_text_box.textChanged.disconnect()
+
             # Update UI
             self.top_slider.setValue(self.top_border)
             self.bottom_slider.setValue(self.bottom_border)
@@ -656,6 +793,16 @@ class MainWindow(QWidget):
             self.bottom_text_box.setText(str(self.bottom_border))
             self.left_text_box.setText(str(self.left_border))
             self.right_text_box.setText(str(self.right_border))
+
+            # Reconnect signals
+            self.top_slider.valueChanged.connect(self.onSliderChanged)
+            self.bottom_slider.valueChanged.connect(self.onSliderChanged)
+            self.left_slider.valueChanged.connect(self.onSliderChanged)
+            self.right_slider.valueChanged.connect(self.onSliderChanged)
+            self.top_text_box.textChanged.connect(self.onTextChanged)
+            self.bottom_text_box.textChanged.connect(self.onTextChanged)
+            self.left_text_box.textChanged.connect(self.onTextChanged)
+            self.right_text_box.textChanged.connect(self.onTextChanged)
 
             # Update color
             b, g, r = self.border_color
@@ -865,6 +1012,260 @@ class MainWindow(QWidget):
 
     def imageResizeEvent(self, event):
         self.updateBorder()
+
+    def createBatchGroup(self):
+        batch_group = QGroupBox("Batch Processing")
+        batch_group.setStyleSheet(
+            """
+            QGroupBox {
+                font-weight: bold;
+                color: #ffffff;
+                border: 2px solid #404040;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """
+        )
+        batch_layout = QVBoxLayout()
+
+        # Select images button
+        self.select_images_button = QPushButton("Select Images for Batch")
+        self.select_images_button.setStyleSheet(
+            """
+            QPushButton {
+                font-size: 14px;
+                padding: 10px 20px;
+                background-color: #9C27B0;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #7B1FA2;
+            }
+            QPushButton:pressed {
+                background-color: #6A1B9A;
+            }
+        """
+        )
+        self.select_images_button.clicked.connect(self.selectBatchImages)
+
+        # Select output directory button
+        self.select_output_button = QPushButton("Select Output Directory")
+        self.select_output_button.setStyleSheet(
+            """
+            QPushButton {
+                font-size: 14px;
+                padding: 10px 20px;
+                background-color: #607D8B;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #455A64;
+            }
+            QPushButton:pressed {
+                background-color: #37474F;
+            }
+        """
+        )
+        self.select_output_button.clicked.connect(self.selectBatchOutputDir)
+
+        # Process batch button
+        self.process_batch_button = QPushButton("Process Batch")
+        self.process_batch_button.setStyleSheet(
+            """
+            QPushButton {
+                font-size: 14px;
+                padding: 10px 20px;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+            QPushButton:disabled {
+                background-color: #555;
+                color: #888;
+            }
+        """
+        )
+        self.process_batch_button.clicked.connect(self.processBatch)
+        self.process_batch_button.setEnabled(False)
+
+        # Progress bar
+        self.batch_progress = QProgressBar()
+        self.batch_progress.setStyleSheet(
+            """
+            QProgressBar {
+                border: 2px solid #404040;
+                border-radius: 5px;
+                text-align: center;
+                background-color: #1e1e1e;
+                color: #ffffff;
+            }
+            QProgressBar::chunk {
+                background-color: #4CAF50;
+                border-radius: 3px;
+            }
+        """
+        )
+        self.batch_progress.setVisible(False)
+
+        # Status label
+        self.batch_status_label = QLabel("No images selected")
+        self.batch_status_label.setStyleSheet("color: #ffffff; font-size: 12px;")
+
+        # Output directory label
+        self.output_dir_label = QLabel("No output directory selected")
+        self.output_dir_label.setStyleSheet("color: #ffffff; font-size: 12px;")
+
+        batch_layout.addWidget(self.select_images_button)
+        batch_layout.addWidget(self.select_output_button)
+        batch_layout.addWidget(self.process_batch_button)
+        batch_layout.addWidget(self.batch_progress)
+        batch_layout.addWidget(self.batch_status_label)
+        batch_layout.addWidget(self.output_dir_label)
+
+        batch_group.setLayout(batch_layout)
+        return batch_group
+
+    def selectBatchImages(self):
+        file_dialog = QFileDialog()
+        file_paths, _ = file_dialog.getOpenFileNames(
+            self,
+            "Select Images for Batch Processing",
+            "",
+            "Image Files (*.png *.jpg *.jpeg *.bmp *.gif)",
+        )
+
+        if file_paths:
+            self.batch_images = file_paths
+            self.batch_status_label.setText(f"{len(file_paths)} images selected")
+            self.updateBatchButtonState()
+
+    def selectBatchOutputDir(self):
+        dir_path = QFileDialog.getExistingDirectory(
+            self, "Select Output Directory for Batch Processing"
+        )
+
+        if dir_path:
+            self.batch_output_dir = dir_path
+            # Show only the last part of the path for display
+            display_path = os.path.basename(dir_path)
+            if len(dir_path) > 30:
+                display_path = "..." + dir_path[-27:]
+            self.output_dir_label.setText(f"Output: {display_path}")
+            self.updateBatchButtonState()
+
+    def updateBatchButtonState(self):
+        # Enable process button only if both images and output directory are selected
+        can_process = len(self.batch_images) > 0 and self.batch_output_dir is not None
+        self.process_batch_button.setEnabled(can_process)
+
+    def processBatch(self):
+        if not self.batch_images or not self.batch_output_dir:
+            return
+
+        # Confirm with user
+        reply = QMessageBox.question(
+            self,
+            "Confirm Batch Processing",
+            f"Process {len(self.batch_images)} images with current border settings?\n\n"
+            f"Top: {self.top_border}, Bottom: {self.bottom_border}\n"
+            f"Left: {self.left_border}, Right: {self.right_border}\n"
+            f"Color: RGB{self.border_color[::-1]}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if reply == QMessageBox.StandardButton.No:
+            return
+
+        # Start batch processing
+        self.processing_batch = True
+        self.batch_progress.setVisible(True)
+        self.batch_progress.setMaximum(len(self.batch_images))
+        self.batch_progress.setValue(0)
+
+        # Disable buttons during processing
+        self.select_images_button.setEnabled(False)
+        self.select_output_button.setEnabled(False)
+        self.process_batch_button.setEnabled(False)
+
+        # Process images
+        success_count = 0
+        error_count = 0
+
+        for i, image_path in enumerate(self.batch_images):
+            try:
+                # Load image
+                image = cv2.imread(image_path)
+                if image is None:
+                    error_count += 1
+                    continue
+
+                # Apply border
+                bordered_image = cv2.copyMakeBorder(
+                    image,
+                    self.top_border,
+                    self.bottom_border,
+                    self.left_border,
+                    self.right_border,
+                    cv2.BORDER_CONSTANT,
+                    value=self.border_color,
+                )
+
+                # Generate output filename
+                base_name = os.path.splitext(os.path.basename(image_path))[0]
+                extension = os.path.splitext(image_path)[1]
+                output_path = os.path.join(
+                    self.batch_output_dir, f"{base_name}_bordered{extension}"
+                )
+
+                # Save image
+                cv2.imwrite(output_path, bordered_image)
+                success_count += 1
+
+            except Exception as e:
+                error_count += 1
+                print(f"Error processing {image_path}: {str(e)}")
+
+            # Update progress
+            self.batch_progress.setValue(i + 1)
+            QApplication.processEvents()  # Allow UI updates
+
+        # Show completion message
+        self.batch_progress.setVisible(False)
+        self.select_images_button.setEnabled(True)
+        self.select_output_button.setEnabled(True)
+        self.processing_batch = False
+
+        # Show results
+        message = "Batch processing complete!\n\n"
+        message += f"Successfully processed: {success_count} images\n"
+        if error_count > 0:
+            message += f"Failed to process: {error_count} images"
+
+        QMessageBox.information(self, "Batch Processing Complete", message)
+
+        # Update button state
+        self.updateBatchButtonState()
 
 
 if __name__ == "__main__":
