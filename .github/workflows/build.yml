@@ -41,24 +41,24 @@ jobs:
           # The --windowed flag (for GUI apps on Windows/macOS) prevents a console window from appearing.
 
           # GitHub Actions sets RUNNER_OS environment variable automatically.
-          # Use different shell syntax for Windows (PowerShell) vs. Linux/macOS (Bash).
-          # For Windows, $env:RUNNER_OS is used. For Bash, $RUNNER_OS is used.
+          # The shell used will be the default for the runner OS (pwsh for Windows, bash for Linux/macOS).
+          # The conditional logic within the script adapts to the shell's syntax.
 
-          # If the current runner is Windows
+          # If the current runner is Windows (PowerShell syntax)
           if ($env:RUNNER_OS -eq "Windows") {
             pyinstaller --noconfirm --onefile --windowed --name "photon" main.py
           }
-          # If the current runner is macOS
-          elif ($env:RUNNER_OS -eq "macOS") {
+          # If the current runner is macOS (Bash syntax)
+          elif [ "$RUNNER_OS" == "macOS" ]; then
             pyinstaller --noconfirm --onefile --windowed --name "photon" main.py
           }
-          # Otherwise (Linux)
+          # Otherwise (Linux - Bash syntax)
           else {
             pyinstaller --noconfirm --onefile --name "photon" main.py
           }
-        # Explicitly set the shell for Windows runners to PowerShell.
-        # For Ubuntu and macOS, the default shell (bash) is suitable.
-        shell: ${{ matrix.os == 'windows-latest' && 'pwsh' || 'bash' }}
+        # REMOVED: shell: ${{ matrix.os == 'windows-latest' && 'pwsh' || 'bash' }}
+        # The default shell for each runner (pwsh on Windows, bash on others)
+        # will automatically be used, which correctly executes the if/elif/else logic.
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
