@@ -6,7 +6,15 @@ Utilities for Photographers
 
 ## Features
 
-- Add border to images.
-- Create histograms from EXIF data
+- Add borders to images.
+- Select border color and width for each side.
+- Save and load border settings for difference workflows.
+- Batch apply edits to photos.
 
-All features are available to batch edit images.
+
+## Coming Soon
+- Powerful tool to explore EXIF data
+- Batch rename images
+- EXIF data scrubber
+- Presets for crops
+- "Polaroid" preset images.
