@@ -336,7 +336,7 @@ class MainWindow(QWidget):
         hello_layout.setContentsMargins(20, 20, 20, 20)
 
         # Hello World label
-        hello_label = QLabel("Hello World!")
+        hello_label = QLabel("Coming Soon...")
         hello_label.setStyleSheet(
             """
             color: #ffffff;
@@ -392,8 +392,8 @@ class MainWindow(QWidget):
         tab_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Create tab buttons
-        self.createTabButton("Image Editor", 0, tab_layout)
-        self.createTabButton("Hello World", 1, tab_layout)
+        self.createTabButton("Add Border", 0, tab_layout)
+        self.createTabButton("View EXIF", 1, tab_layout)
 
         # Window controls
         controls_layout = QHBoxLayout()
