@@ -3,8 +3,11 @@ import os
 import sys
 
 import cv2
+import matplotlib.pyplot as plt
 import numpy as np
-from PyQt6.QtCore import QPoint, QRect, QRectF, Qt
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+from PyQt6.QtCore import QPoint, QRect, QRectF, Qt, QThread, pyqtSignal
 from PyQt6.QtGui import (
     QBrush,
     QColor,
@@ -18,6 +21,7 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import (
     QApplication,
     QColorDialog,
+    QComboBox,
     QFileDialog,
     QFrame,
     QGridLayout,
@@ -35,7 +39,40 @@ from PyQt6.QtWidgets import (
 )
 
 from border import create_border_group
-from crop import create_crop_group
+from focal_length import analyze_focal_lengths_batched, analyze_focal_lengths_parallel
+
+# from crop import create_crop_group
+
+
+class FocalLengthWorker(QThread):
+    """Worker thread for focal length analysis."""
+
+    finished = pyqtSignal(dict)
+    error = pyqtSignal(str)
+
+    def __init__(self, folder_path, method="fast", max_workers=4, batch_size=1000):
+        super().__init__()
+        self.folder_path = folder_path
+        self.method = method
+        self.max_workers = max_workers
+        self.batch_size = batch_size
+
+    def run(self):
+        try:
+            # Call the appropriate focal length analysis function
+            if self.method == "batched":
+                result = analyze_focal_lengths_batched(
+                    self.folder_path,
+                    batch_size=self.batch_size,
+                    max_workers=self.max_workers,
+                )
+            else:
+                result = analyze_focal_lengths_parallel(
+                    self.folder_path, max_workers=self.max_workers
+                )
+            self.finished.emit(result)
+        except Exception as e:
+            self.error.emit(str(e))
 
 
 class MainWindow(QWidget):
@@ -52,16 +89,22 @@ class MainWindow(QWidget):
         self.right_border = 0
 
         # Crop values
-        self.crop_mode = False
-        self.crop_start = None
-        self.crop_end = None
-        self.crop_rect = None
-        self.cropped_image = None
+        # self.crop_mode = False
+        # self.crop_start = None
+        # self.crop_end = None
+        # self.crop_rect = None
+
+        # self.cropped_image = None
 
         # Batch processing values
         self.batch_images = []
         self.batch_output_dir = None
         self.processing_batch = False
+
+        # Focal length analysis values
+        self.focal_length_data = None
+        self.focal_length_folder = None
+        self.focal_worker = None
 
         # Window dragging
         self.dragging = False
@@ -123,7 +166,7 @@ class MainWindow(QWidget):
 
         # Create tab content
         self.createMainTab()
-        self.createHelloWorldTab()
+        self.createFocalLengthTab()
 
         main_layout.addWidget(self.stacked_widget)
         main_container.setLayout(main_layout)
@@ -263,7 +306,7 @@ class MainWindow(QWidget):
         border_group = create_border_group(self)
 
         # Crop controls
-        crop_group = create_crop_group(self)
+        # crop_group = create_crop_group(self)
 
         # Batch processing controls
         batch_group = self.createBatchGroup()
@@ -277,7 +320,7 @@ class MainWindow(QWidget):
         left_panel.addLayout(button_layout)
         left_panel.addWidget(color_group)
         left_panel.addWidget(border_group)
-        left_panel.addWidget(crop_group)
+        # left_panel.addWidget(crop_group)
         left_panel.addWidget(batch_group)
         left_panel.addStretch()
 
@@ -301,10 +344,10 @@ class MainWindow(QWidget):
         self.image_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Enable mouse events for crop selection
-        self.image_widget.setMouseTracking(True)
-        self.image_widget.mousePressEvent = self.imageMousePressEvent
-        self.image_widget.mouseMoveEvent = self.imageMouseMoveEvent
-        self.image_widget.mouseReleaseEvent = self.imageMouseReleaseEvent
+        # self.image_widget.setMouseTracking(True)
+        # self.image_widget.mousePressEvent = self.imageMousePressEvent
+        # self.image_widget.mouseMoveEvent = self.imageMouseMoveEvent
+        # self.image_widget.mouseReleaseEvent = self.imageMouseReleaseEvent
 
         # Connect resize event to update image
         self.image_widget.resizeEvent = self.imageResizeEvent
@@ -318,13 +361,13 @@ class MainWindow(QWidget):
         content_widget.setLayout(content_layout)
         self.stacked_widget.addWidget(content_widget)
 
-    def createHelloWorldTab(self):
-        # Content area for Hello World tab
-        hello_widget = QWidget()
-        hello_widget.setObjectName("helloWidget")
-        hello_widget.setStyleSheet(
+    def createFocalLengthTab(self):
+        # Content area for Focal Length Analysis tab
+        focal_widget = QWidget()
+        focal_widget.setObjectName("focalWidget")
+        focal_widget.setStyleSheet(
             """
-            #helloWidget {
+            #focalWidget {
                 background-color: #2b2b2b;
                 border-bottom-left-radius: 10px;
                 border-bottom-right-radius: 10px;
@@ -332,26 +375,313 @@ class MainWindow(QWidget):
         """
         )
 
-        hello_layout = QVBoxLayout()
-        hello_layout.setContentsMargins(20, 20, 20, 20)
+        focal_layout = QHBoxLayout()
+        focal_layout.setContentsMargins(20, 20, 20, 20)
 
-        # Hello World label
-        hello_label = QLabel("Coming Soon...")
-        hello_label.setStyleSheet(
+        # Left panel for controls
+        left_panel_widget = QWidget()
+        left_panel_widget.setFixedWidth(350)
+        left_panel = QVBoxLayout()
+        left_panel.setContentsMargins(0, 0, 0, 0)
+
+        # Folder selection button
+        self.select_folder_button = QPushButton("Select Image Folder", self)
+        self.select_folder_button.setStyleSheet(
             """
-            color: #ffffff;
-            font-size: 48px;
+            QPushButton {
+                font-size: 16px;
+                padding: 12px 24px;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+            """
+        )
+        self.select_folder_button.clicked.connect(self.selectFocalLengthFolder)
+
+        # Analyze button
+        self.analyze_button = QPushButton("Analyze Focal Lengths", self)
+        self.analyze_button.setStyleSheet(
+            """
+            QPushButton {
+                font-size: 16px;
+                padding: 12px 24px;
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:pressed {
+                background-color: #1565C0;
+            }
+            QPushButton:disabled {
+                background-color: #555;
+                color: #888;
+            }
+            """
+        )
+        self.analyze_button.clicked.connect(self.analyzeFocalLengths)
+        self.analyze_button.setEnabled(False)
+
+        # Performance options group
+        performance_group = QGroupBox("Performance Options")
+        performance_group.setStyleSheet(
+            """
+            QGroupBox {
+                font-weight: bold;
+                color: #ffffff;
+                border: 2px solid #404040;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """
+        )
+        performance_layout = QVBoxLayout()
+
+        # Analysis method selection
+        method_layout = QHBoxLayout()
+        method_label = QLabel("Method:")
+        method_label.setStyleSheet("color: #ffffff; font-size: 12px;")
+
+        self.method_combo = QComboBox()
+        self.method_combo.addItems(["Fast (Single Process)", "Batched (Large Folders)"])
+        self.method_combo.setStyleSheet(
+            """
+            QComboBox {
+                background-color: #404040;
+                border: 1px solid #555;
+                border-radius: 4px;
+                padding: 5px;
+                color: #ffffff;
+                font-size: 12px;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid #ffffff;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #404040;
+                border: 1px solid #555;
+                color: #ffffff;
+                selection-background-color: #2196F3;
+            }
+        """
+        )
+
+        method_layout.addWidget(method_label)
+        method_layout.addWidget(self.method_combo)
+        method_layout.addStretch()
+
+        # Thread count selection
+        thread_layout = QHBoxLayout()
+        thread_label = QLabel("Threads:")
+        thread_label.setStyleSheet("color: #ffffff; font-size: 12px;")
+
+        self.thread_combo = QComboBox()
+        self.thread_combo.addItems(["1", "2", "4", "8", "16"])
+        self.thread_combo.setCurrentText("4")  # Default to 4 threads
+        self.thread_combo.setStyleSheet(
+            """
+            QComboBox {
+                background-color: #404040;
+                border: 1px solid #555;
+                border-radius: 4px;
+                padding: 5px;
+                color: #ffffff;
+                font-size: 12px;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid #ffffff;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #404040;
+                border: 1px solid #555;
+                color: #ffffff;
+                selection-background-color: #2196F3;
+            }
+        """
+        )
+
+        thread_layout.addWidget(thread_label)
+        thread_layout.addWidget(self.thread_combo)
+        thread_layout.addStretch()
+
+        # Batch size for batched method
+        batch_layout = QHBoxLayout()
+        batch_label = QLabel("Batch Size:")
+        batch_label.setStyleSheet("color: #ffffff; font-size: 12px;")
+
+        self.batch_combo = QComboBox()
+        self.batch_combo.addItems(["50", "100", "150"])
+        self.batch_combo.setCurrentText("1000")  # Default to 1000
+        self.batch_combo.setStyleSheet(
+            """
+            QComboBox {
+                background-color: #404040;
+                border: 1px solid #555;
+                border-radius: 4px;
+                padding: 5px;
+                color: #ffffff;
+                font-size: 12px;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid #ffffff;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #404040;
+                border: 1px solid #555;
+                color: #ffffff;
+                selection-background-color: #2196F3;
+            }
+        """
+        )
+
+        batch_layout.addWidget(batch_label)
+        batch_layout.addWidget(self.batch_combo)
+        batch_layout.addStretch()
+
+        performance_layout.addLayout(method_layout)
+        performance_layout.addLayout(thread_layout)
+        performance_layout.addLayout(batch_layout)
+        performance_group.setLayout(performance_layout)
+
+        # Progress bar
+        self.focal_progress = QProgressBar()
+        self.focal_progress.setStyleSheet(
+            """
+            QProgressBar {
+                border: 2px solid #404040;
+                border-radius: 5px;
+                text-align: center;
+                background-color: #1e1e1e;
+                color: #ffffff;
+            }
+            QProgressBar::chunk {
+                background-color: #4CAF50;
+                border-radius: 3px;
+            }
+        """
+        )
+        self.focal_progress.setVisible(False)
+
+        # Loading label
+        self.loading_label = QLabel("")
+        self.loading_label.setStyleSheet(
+            """
+            color: #4CAF50;
+            font-size: 14px;
             font-weight: bold;
             text-align: center;
         """
         )
-        hello_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.loading_label.setVisible(False)
 
-        hello_layout.addWidget(hello_label)
-        hello_layout.addStretch()
+        # Status label
+        self.focal_status_label = QLabel("No folder selected")
+        self.focal_status_label.setStyleSheet("color: #ffffff; font-size: 12px;")
 
-        hello_widget.setLayout(hello_layout)
-        self.stacked_widget.addWidget(hello_widget)
+        # Results group
+        results_group = QGroupBox("Analysis Results")
+        results_group.setStyleSheet(
+            """
+            QGroupBox {
+                font-weight: bold;
+                color: #ffffff;
+                border: 2px solid #404040;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """
+        )
+        results_layout = QVBoxLayout()
+
+        self.results_label = QLabel("No analysis performed yet")
+        self.results_label.setStyleSheet("color: #ffffff; font-size: 12px;")
+        self.results_label.setWordWrap(True)
+
+        results_layout.addWidget(self.results_label)
+        results_group.setLayout(results_layout)
+
+        # Add controls to left panel
+        left_panel.addWidget(self.select_folder_button)
+        left_panel.addWidget(self.analyze_button)
+        left_panel.addWidget(performance_group)
+        left_panel.addWidget(self.focal_progress)
+        left_panel.addWidget(self.loading_label)
+        left_panel.addWidget(self.focal_status_label)
+        left_panel.addWidget(results_group)
+        left_panel.addStretch()
+
+        left_panel_widget.setLayout(left_panel)
+
+        # Right panel for histogram
+        right_panel = QVBoxLayout()
+
+        # Histogram widget
+        self.histogram_widget = QLabel()
+        self.histogram_widget.setMinimumSize(400, 300)
+        self.histogram_widget.setStyleSheet(
+            """
+            QLabel {
+                border: 2px dashed #555;
+                border-radius: 8px;
+                background-color: #1e1e1e;
+            }
+        """
+        )
+        self.histogram_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.histogram_widget.setText("Histogram will appear here after analysis")
+
+        right_panel.addWidget(self.histogram_widget)
+
+        # Add panels to content layout
+        focal_layout.addWidget(left_panel_widget)
+        focal_layout.addLayout(right_panel, 1)
+
+        focal_widget.setLayout(focal_layout)
+        self.stacked_widget.addWidget(focal_widget)
 
     def createTitleBar(self):
         title_bar = QWidget()
@@ -393,7 +723,7 @@ class MainWindow(QWidget):
 
         # Create tab buttons
         self.createTabButton("Add Border", 0, tab_layout)
-        self.createTabButton("View EXIF", 1, tab_layout)
+        self.createTabButton("Optimal Prime", 1, tab_layout)
 
         # Window controls
         controls_layout = QHBoxLayout()
@@ -626,28 +956,28 @@ class MainWindow(QWidget):
 
         self.current_image_path = image_path
         self.download_button.setEnabled(True)  # Enable download button
-        self.crop_button.setEnabled(True)  # Enable crop button
+        # self.crop_button.setEnabled(True)  # Enable crop button
 
-        # Update crop button styling to match "Enter Crop Mode" state
-        self.crop_button.setText("Enter Crop Mode")
-        self.crop_button.setStyleSheet(
-            """
-            QPushButton {
-                font-size: 14px;
-                padding: 8px 16px;
-                background-color: #FF9800;
-                color: white;
-                border: none;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #F57C00;
-            }
-            QPushButton:pressed {
-                background-color: #E65100;
-            }
-            """
-        )
+        # # Update crop button styling to match "Enter Crop Mode" state
+        # self.crop_button.setText("Enter Crop Mode")
+        # self.crop_button.setStyleSheet(
+        #     """
+        #     QPushButton {
+        #         font-size: 14px;
+        #         padding: 8px 16px;
+        #         background-color: #FF9800;
+        #         color: white;
+        #         border: none;
+        #         border-radius: 5px;
+        #     }
+        #     QPushButton:hover {
+        #         background-color: #F57C00;
+        #     }
+        #     QPushButton:pressed {
+        #         background-color: #E65100;
+        #     }
+        #     """
+        # )
 
         self.updateBorder()
 
@@ -691,24 +1021,24 @@ class MainWindow(QWidget):
         )
 
         # Draw crop selection overlay if in crop mode
-        if self.crop_mode and self.crop_rect:
-            painter = QPainter(scaled_pixmap)
+        # if self.crop_mode and self.crop_rect:
+        #     painter = QPainter(scaled_pixmap)
 
-            # Create a semi-transparent overlay for the area outside the crop
-            path = QPainterPath()
-            path.addRect(QRectF(scaled_pixmap.rect()))
-            path.addRect(QRectF(self.crop_rect))
+        #     # Create a semi-transparent overlay for the area outside the crop
+        #     path = QPainterPath()
+        #     path.addRect(QRectF(scaled_pixmap.rect()))
+        #     path.addRect(QRectF(self.crop_rect))
 
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(0, 0, 0, 100))  # Semi-transparent black
-            painter.drawPath(path)
+        #     painter.setPen(Qt.PenStyle.NoPen)
+        #     painter.setBrush(QColor(0, 0, 0, 100))  # Semi-transparent black
+        #     painter.drawPath(path)
 
-            # Draw the yellow border for the crop rectangle
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.setPen(QPen(QColor(255, 255, 0), 2))  # Yellow border
-            painter.drawRect(self.crop_rect)
+        #     # Draw the yellow border for the crop rectangle
+        #     painter.setBrush(Qt.BrushStyle.NoBrush)
+        #     painter.setPen(QPen(QColor(255, 255, 0), 2))  # Yellow border
+        #     painter.drawRect(self.crop_rect)
 
-            painter.end()
+        #     painter.end()
 
         self.image_widget.setPixmap(scaled_pixmap)
 
@@ -824,191 +1154,191 @@ class MainWindow(QWidget):
             # Update the image
             self.updateBorder()
 
-    def toggleCropMode(self):
-        if self.original_image is None:
-            return
+    # def toggleCropMode(self):
+    #     if self.original_image is None:
+    #         return
 
-        self.crop_mode = not self.crop_mode
+    #     self.crop_mode = not self.crop_mode
 
-        if self.crop_mode:
-            self.crop_button.setText("Disable Crop Mode")
-            self.crop_button.setStyleSheet(
-                """
-                QPushButton {
-                    font-size: 14px;
-                    padding: 8px 16px;
-                    background-color: #E65100;
-                    color: white;
-                    border: none;
-                    border-radius: 5px;
-                }
-                QPushButton:hover {
-                    background-color: #BF360C;
-                }
-                QPushButton:pressed {
-                    background-color: #8D6E63;
-                }
-                """
-            )
-            self.image_widget.setCursor(QCursor(Qt.CursorShape.CrossCursor))
-        else:
-            self.crop_button.setText("Enter Crop Mode")
-            self.crop_button.setStyleSheet(
-                """
-                QPushButton {
-                    font-size: 14px;
-                    padding: 8px 16px;
-                    background-color: #FF9800;
-                    color: white;
-                    border: none;
-                    border-radius: 5px;
-                }
-                QPushButton:hover {
-                    background-color: #F57C00;
-                }
-                QPushButton:pressed {
-                    background-color: #E65100;
-                }
-                """
-            )
-            self.image_widget.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
-            self.cancelCrop()
+    #     if self.crop_mode:
+    #         self.crop_button.setText("Disable Crop Mode")
+    #         self.crop_button.setStyleSheet(
+    #             """
+    #             QPushButton {
+    #                 font-size: 14px;
+    #                 padding: 8px 16px;
+    #                 background-color: #E65100;
+    #                 color: white;
+    #                 border: none;
+    #                 border-radius: 5px;
+    #             }
+    #             QPushButton:hover {
+    #                 background-color: #BF360C;
+    #             }
+    #             QPushButton:pressed {
+    #                 background-color: #8D6E63;
+    #             }
+    #             """
+    #         )
+    #         self.image_widget.setCursor(QCursor(Qt.CursorShape.CrossCursor))
+    #     else:
+    #         self.crop_button.setText("Enter Crop Mode")
+    #         self.crop_button.setStyleSheet(
+    #             """
+    #             QPushButton {
+    #                 font-size: 14px;
+    #                 padding: 8px 16px;
+    #                 background-color: #FF9800;
+    #                 color: white;
+    #                 border: none;
+    #                 border-radius: 5px;
+    #             }
+    #             QPushButton:hover {
+    #                 background-color: #F57C00;
+    #             }
+    #             QPushButton:pressed {
+    #                 background-color: #E65100;
+    #             }
+    #             """
+    #         )
+    #         self.image_widget.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
+    #         self.cancelCrop()
 
-    def imageMousePressEvent(self, event):
-        if not self.crop_mode or self.original_image is None:
-            return
+    # def imageMousePressEvent(self, event):
+    #     if not self.crop_mode or self.original_image is None:
+    #         return
 
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.crop_start = event.pos()
-            self.crop_end = None
-            self.crop_rect = None
-            self.apply_crop_button.setEnabled(False)
+    #     if event.button() == Qt.MouseButton.LeftButton:
+    #         self.crop_start = event.pos()
+    #         self.crop_end = None
+    #         self.crop_rect = None
+    #         self.apply_crop_button.setEnabled(False)
 
-    def imageMouseMoveEvent(self, event):
-        if not self.crop_mode or self.original_image is None or not self.crop_start:
-            return
+    # def imageMouseMoveEvent(self, event):
+    #     if not self.crop_mode or self.original_image is None or not self.crop_start:
+    #         return
 
-        self.crop_end = event.pos()
-        self.updateCropDisplay()
+    #     self.crop_end = event.pos()
+    #     self.updateCropDisplay()
 
-    def imageMouseReleaseEvent(self, event):
-        if not self.crop_mode or self.original_image is None or not self.crop_start:
-            return
+    # def imageMouseReleaseEvent(self, event):
+    #     if not self.crop_mode or self.original_image is None or not self.crop_start:
+    #         return
 
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.crop_end = event.pos()
-            self.updateCropDisplay()
+    #     if event.button() == Qt.MouseButton.LeftButton:
+    #         self.crop_end = event.pos()
+    #         self.updateCropDisplay()
 
-            # Enable crop action buttons if we have a valid selection
-            if (
-                self.crop_rect
-                and self.crop_rect.width() > 10
-                and self.crop_rect.height() > 10
-            ):
-                self.apply_crop_button.setEnabled(True)
+    #         # Enable crop action buttons if we have a valid selection
+    #         if (
+    #             self.crop_rect
+    #             and self.crop_rect.width() > 10
+    #             and self.crop_rect.height() > 10
+    #         ):
+    #             self.apply_crop_button.setEnabled(True)
 
-            # Stop tracking mouse for crop once selection is made
-            self.crop_start = None
+    #         # Stop tracking mouse for crop once selection is made
+    #         self.crop_start = None
 
-    def updateCropDisplay(self):
-        if not self.crop_start or not self.crop_end:
-            return
+    # def updateCropDisplay(self):
+    #     if not self.crop_start or not self.crop_end:
+    #         return
 
-        # Calculate crop rectangle
-        x1, y1 = min(self.crop_start.x(), self.crop_end.x()), min(
-            self.crop_start.y(), self.crop_end.y()
-        )
-        x2, y2 = max(self.crop_start.x(), self.crop_end.x()), max(
-            self.crop_start.y(), self.crop_end.y()
-        )
+    #     # Calculate crop rectangle
+    #     x1, y1 = min(self.crop_start.x(), self.crop_end.x()), min(
+    #         self.crop_start.y(), self.crop_end.y()
+    #     )
+    #     x2, y2 = max(self.crop_start.x(), self.crop_end.x()), max(
+    #         self.crop_start.y(), self.crop_end.y()
+    #     )
 
-        # Ensure crop rectangle is within image bounds
-        widget_size = self.image_widget.size()
-        x1 = max(0, min(x1, widget_size.width()))
-        y1 = max(0, min(y1, widget_size.height()))
-        x2 = max(0, min(x2, widget_size.width()))
-        y2 = max(0, min(y2, widget_size.height()))
+    #     # Ensure crop rectangle is within image bounds
+    #     widget_size = self.image_widget.size()
+    #     x1 = max(0, min(x1, widget_size.width()))
+    #     y1 = max(0, min(y1, widget_size.height()))
+    #     x2 = max(0, min(x2, widget_size.width()))
+    #     y2 = max(0, min(y2, widget_size.height()))
 
-        self.crop_rect = QRect(x1, y1, x2 - x1, y2 - y1)
+    #     self.crop_rect = QRect(x1, y1, x2 - x1, y2 - y1)
 
-        # Update the display with crop overlay
-        self.updateBorder()
+    #     # Update the display with crop overlay
+    #     self.updateBorder()
 
-    def applyCrop(self):
-        if not self.crop_rect or self.original_image is None:
-            return
+    # def applyCrop(self):
+    #     if not self.crop_rect or self.original_image is None:
+    #         return
 
-        # Get the current image (with borders applied)
-        current_image = cv2.copyMakeBorder(
-            self.original_image,
-            self.top_border,
-            self.bottom_border,
-            self.left_border,
-            self.right_border,
-            cv2.BORDER_CONSTANT,
-            value=self.border_color,
-        )
+    #     # Get the current image (with borders applied)
+    #     current_image = cv2.copyMakeBorder(
+    #         self.original_image,
+    #         self.top_border,
+    #         self.bottom_border,
+    #         self.left_border,
+    #         self.right_border,
+    #         cv2.BORDER_CONSTANT,
+    #         value=self.border_color,
+    #     )
 
-        # Calculate crop coordinates in the full image
-        widget_size = self.image_widget.size()
-        pixmap_size = (
-            self.image_widget.pixmap().size()
-            if self.image_widget.pixmap()
-            else widget_size
-        )
+    #     # Calculate crop coordinates in the full image
+    #     widget_size = self.image_widget.size()
+    #     pixmap_size = (
+    #         self.image_widget.pixmap().size()
+    #         if self.image_widget.pixmap()
+    #         else widget_size
+    #     )
 
-        # Calculate scaling factors
-        scale_x = current_image.shape[1] / pixmap_size.width()
-        scale_y = current_image.shape[0] / pixmap_size.height()
+    #     # Calculate scaling factors
+    #     scale_x = current_image.shape[1] / pixmap_size.width()
+    #     scale_y = current_image.shape[0] / pixmap_size.height()
 
-        # Calculate crop coordinates in the full image
-        crop_x = int(self.crop_rect.x() * scale_x)
-        crop_y = int(self.crop_rect.y() * scale_y)
-        crop_width = int(self.crop_rect.width() * scale_x)
-        crop_height = int(self.crop_rect.height() * scale_y)
+    #     # Calculate crop coordinates in the full image
+    #     crop_x = int(self.crop_rect.x() * scale_x)
+    #     crop_y = int(self.crop_rect.y() * scale_y)
+    #     crop_width = int(self.crop_rect.width() * scale_x)
+    #     crop_height = int(self.crop_rect.height() * scale_y)
 
-        # Ensure crop coordinates are within image bounds
-        crop_x = max(0, min(crop_x, current_image.shape[1] - 1))
-        crop_y = max(0, min(crop_y, current_image.shape[0] - 1))
-        crop_width = min(crop_width, current_image.shape[1] - crop_x)
-        crop_height = min(crop_height, current_image.shape[0] - crop_y)
+    #     # Ensure crop coordinates are within image bounds
+    #     crop_x = max(0, min(crop_x, current_image.shape[1] - 1))
+    #     crop_y = max(0, min(crop_y, current_image.shape[0] - 1))
+    #     crop_width = min(crop_width, current_image.shape[1] - crop_x)
+    #     crop_height = min(crop_height, current_image.shape[0] - crop_y)
 
-        # Apply the crop
-        self.cropped_image = current_image[
-            crop_y : crop_y + crop_height, crop_x : crop_x + crop_width
-        ]
+    #     # Apply the crop
+    #     self.cropped_image = current_image[
+    #         crop_y : crop_y + crop_height, crop_x : crop_x + crop_width
+    #     ]
 
-        # Update the original image to the cropped version
-        self.original_image = self.cropped_image.copy()
+    #     # Update the original image to the cropped version
+    #     self.original_image = self.cropped_image.copy()
 
-        # Reset border values
-        self.top_border = 0
-        self.bottom_border = 0
-        self.left_border = 0
-        self.right_border = 0
+    #     # Reset border values
+    #     self.top_border = 0
+    #     self.bottom_border = 0
+    #     self.left_border = 0
+    #     self.right_border = 0
 
-        # Update sliders and text boxes
-        self.top_slider.setValue(0)
-        self.bottom_slider.setValue(0)
-        self.left_slider.setValue(0)
-        self.right_slider.setValue(0)
-        self.top_text_box.setText("0")
-        self.bottom_text_box.setText("0")
-        self.left_text_box.setText("0")
-        self.right_text_box.setText("0")
+    #     # Update sliders and text boxes
+    #     self.top_slider.setValue(0)
+    #     self.bottom_slider.setValue(0)
+    #     self.left_slider.setValue(0)
+    #     self.right_slider.setValue(0)
+    #     self.top_text_box.setText("0")
+    #     self.bottom_text_box.setText("0")
+    #     self.left_text_box.setText("0")
+    #     self.right_text_box.setText("0")
 
-        # Exit crop mode
-        self.toggleCropMode()
+    #     # Exit crop mode
+    #     self.toggleCropMode()
 
-        # Update display
-        self.updateBorder()
+    #     # Update display
+    #     self.updateBorder()
 
-    def cancelCrop(self):
-        self.crop_start = None
-        self.crop_end = None
-        self.crop_rect = None
-        self.apply_crop_button.setEnabled(False)
-        self.updateBorder()
+    # def cancelCrop(self):
+    #     self.crop_start = None
+    #     self.crop_end = None
+    #     self.crop_rect = None
+    #     self.apply_crop_button.setEnabled(False)
+    #     self.updateBorder()
 
     def imageResizeEvent(self, event):
         self.updateBorder()
@@ -1266,6 +1596,183 @@ class MainWindow(QWidget):
 
         # Update button state
         self.updateBatchButtonState()
+
+    def selectFocalLengthFolder(self):
+        """Select a folder containing images for focal length analysis."""
+        dir_path = QFileDialog.getExistingDirectory(
+            self, "Select Folder with Images for Focal Length Analysis"
+        )
+
+        if dir_path:
+            self.focal_length_folder = dir_path
+            # Show only the last part of the path for display
+            display_path = os.path.basename(dir_path)
+            if len(dir_path) > 30:
+                display_path = "..." + dir_path[-27:]
+            self.focal_status_label.setText(f"Selected: {display_path}")
+            self.analyze_button.setEnabled(True)
+
+    def analyzeFocalLengths(self):
+        """Analyze focal lengths in the selected folder and create histogram."""
+        if not self.focal_length_folder:
+            return
+
+        # Show progress
+        self.focal_progress.setVisible(True)
+        self.focal_progress.setRange(0, 0)  # Indeterminate progress
+        self.loading_label.setText("Processing images...")
+        self.loading_label.setVisible(True)
+        self.analyze_button.setEnabled(False)
+        self.select_folder_button.setEnabled(False)
+        self.focal_status_label.setText("Analyzing images... Please wait.")
+
+        # Get performance options from UI
+        method = (
+            "batched"
+            if self.method_combo.currentText().startswith("Batched")
+            else "fast"
+        )
+        max_workers = int(self.thread_combo.currentText())
+        batch_size = int(self.batch_combo.currentText())
+
+        # Create and start worker thread
+        self.focal_worker = FocalLengthWorker(
+            self.focal_length_folder,
+            method=method,
+            max_workers=max_workers,
+            batch_size=batch_size,
+        )
+        self.focal_worker.finished.connect(self.onFocalAnalysisComplete)
+        self.focal_worker.error.connect(self.onFocalAnalysisError)
+        self.focal_worker.start()
+
+    def onFocalAnalysisComplete(self, result):
+        """Handle completion of focal length analysis."""
+        import time
+
+        self.focal_length_data = result
+
+        # Update results display
+        if self.focal_length_data["images_with_focal_length"] > 0:
+            results_text = "Analysis Complete!\n\n"
+            results_text += (
+                f"Total images found: {self.focal_length_data['total_images']}\n"
+            )
+            results_text += f"Unique focal lengths: {len(set(self.focal_length_data['focal_lengths']))}"
+
+            self.results_label.setText(results_text)
+
+            # Create and display histogram
+            self.createHistogram()
+        else:
+            self.results_label.setText(
+                "No images with focal length data found in the selected folder."
+            )
+            self.histogram_widget.setText("No data to display")
+
+        # Hide progress and re-enable buttons
+        self.focal_progress.setVisible(False)
+        self.loading_label.setVisible(False)
+        self.analyze_button.setEnabled(True)
+        self.select_folder_button.setEnabled(True)
+        self.focal_status_label.setText(
+            f"Selected: {os.path.basename(self.focal_length_folder)}"
+        )
+
+    def onFocalAnalysisError(self, error_message):
+        """Handle errors in focal length analysis."""
+        QMessageBox.critical(
+            self, "Error", f"An error occurred during analysis:\n{error_message}"
+        )
+        self.results_label.setText("Analysis failed. Please try again.")
+
+        # Hide progress and re-enable buttons
+        self.focal_progress.setVisible(False)
+        self.loading_label.setVisible(False)
+        self.analyze_button.setEnabled(True)
+        self.select_folder_button.setEnabled(True)
+        self.focal_status_label.setText(
+            f"Selected: {os.path.basename(self.focal_length_folder)}"
+        )
+
+    def createHistogram(self):
+        """Create a histogram from the focal length data."""
+        if not self.focal_length_data or not self.focal_length_data["focal_lengths"]:
+            return
+
+        # Create matplotlib figure with dark theme
+        fig = Figure(figsize=(10, 6), facecolor="#2b2b2b")
+        ax = fig.add_subplot(111)
+        ax.set_facecolor("#2b2b2b")
+
+        # Set dark theme colors
+        ax.spines["bottom"].set_color("#ffffff")
+        ax.spines["top"].set_color("#ffffff")
+        ax.spines["right"].set_color("#ffffff")
+        ax.spines["left"].set_color("#ffffff")
+        ax.tick_params(axis="x", colors="#ffffff")
+        ax.tick_params(axis="y", colors="#ffffff")
+        ax.xaxis.label.set_color("#ffffff")
+        ax.yaxis.label.set_color("#ffffff")
+        ax.title.set_color("#ffffff")
+
+        # Create histogram with individual focal lengths as bins
+        focal_lengths = self.focal_length_data["focal_lengths"]
+        unique_focal_lengths = sorted(list(set(focal_lengths)))
+
+        # Count occurrences for each focal length
+        counts = [focal_lengths.count(fl) for fl in unique_focal_lengths]
+
+        # Create bar plot instead of histogram
+        bars = ax.bar(
+            range(len(unique_focal_lengths)),
+            counts,
+            color="#4CAF50",
+            alpha=0.7,
+            edgecolor="#ffffff",
+        )
+
+        # Set x-axis labels to show every focal length
+        ax.set_xticks(range(len(unique_focal_lengths)))
+        ax.set_xticklabels(
+            [f"{fl}mm" for fl in unique_focal_lengths], rotation=90, ha="center"
+        )
+
+        ax.set_xlabel("Focal Length (mm)")
+        ax.set_ylabel("Number of Images")
+        ax.set_title("Focal Length Distribution")
+
+        # Adjust layout to prevent label cutoff
+        fig.tight_layout()
+
+        # Convert matplotlib figure to QPixmap
+        canvas = FigureCanvas(fig)
+        canvas.draw()
+
+        # Get the RGBA buffer from the figure
+        w, h = canvas.get_width_height()
+        buf = np.frombuffer(canvas.tostring_rgb(), dtype=np.uint8)
+        buf.shape = (h, w, 3)
+
+        # Convert to QImage and then QPixmap
+        q_image = QImage(buf.data, w, h, buf.strides[0], QImage.Format.Format_RGB888)
+        pixmap = QPixmap.fromImage(q_image)
+
+        # Scale to fit the widget while maintaining aspect ratio
+        scaled_pixmap = pixmap.scaled(
+            self.histogram_widget.size(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+
+        self.histogram_widget.setPixmap(scaled_pixmap)
+
+    def closeEvent(self, event):
+        """Clean up worker threads when closing the window."""
+        if self.focal_worker and self.focal_worker.isRunning():
+            self.focal_worker.quit()
+            self.focal_worker.wait()
+        event.accept()
 
 
 if __name__ == "__main__":
