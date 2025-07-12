@@ -21,7 +21,6 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import (
     QApplication,
     QColorDialog,
-    QComboBox,
     QFileDialog,
     QFrame,
     QGridLayout,
@@ -50,26 +49,20 @@ class FocalLengthWorker(QThread):
     finished = pyqtSignal(dict)
     error = pyqtSignal(str)
 
-    def __init__(self, folder_path, method="fast", max_workers=4, batch_size=1000):
+    def __init__(self, folder_path, max_workers=4, batch_size=100):
         super().__init__()
         self.folder_path = folder_path
-        self.method = method
         self.max_workers = max_workers
         self.batch_size = batch_size
 
     def run(self):
         try:
-            # Call the appropriate focal length analysis function
-            if self.method == "batched":
-                result = analyze_focal_lengths_batched(
-                    self.folder_path,
-                    batch_size=self.batch_size,
-                    max_workers=self.max_workers,
-                )
-            else:
-                result = analyze_focal_lengths_parallel(
-                    self.folder_path, max_workers=self.max_workers
-                )
+            # Always use the batched method for optimal performance
+            result = analyze_focal_lengths_batched(
+                self.folder_path,
+                batch_size=self.batch_size,
+                max_workers=self.max_workers,
+            )
             self.finished.emit(result)
         except Exception as e:
             self.error.emit(str(e))
@@ -435,151 +428,6 @@ class MainWindow(QWidget):
         self.analyze_button.clicked.connect(self.analyzeFocalLengths)
         self.analyze_button.setEnabled(False)
 
-        # Performance options group
-        performance_group = QGroupBox("Performance Options")
-        performance_group.setStyleSheet(
-            """
-            QGroupBox {
-                font-weight: bold;
-                color: #ffffff;
-                border: 2px solid #404040;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-            }
-        """
-        )
-        performance_layout = QVBoxLayout()
-
-        # Analysis method selection
-        method_layout = QHBoxLayout()
-        method_label = QLabel("Method:")
-        method_label.setStyleSheet("color: #ffffff; font-size: 12px;")
-
-        self.method_combo = QComboBox()
-        self.method_combo.addItems(["Fast (Single Process)", "Batched (Large Folders)"])
-        self.method_combo.setStyleSheet(
-            """
-            QComboBox {
-                background-color: #404040;
-                border: 1px solid #555;
-                border-radius: 4px;
-                padding: 5px;
-                color: #ffffff;
-                font-size: 12px;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 5px solid #ffffff;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #404040;
-                border: 1px solid #555;
-                color: #ffffff;
-                selection-background-color: #2196F3;
-            }
-        """
-        )
-
-        method_layout.addWidget(method_label)
-        method_layout.addWidget(self.method_combo)
-        method_layout.addStretch()
-
-        # Thread count selection
-        thread_layout = QHBoxLayout()
-        thread_label = QLabel("Threads:")
-        thread_label.setStyleSheet("color: #ffffff; font-size: 12px;")
-
-        self.thread_combo = QComboBox()
-        self.thread_combo.addItems(["1", "2", "4", "8", "16"])
-        self.thread_combo.setCurrentText("4")  # Default to 4 threads
-        self.thread_combo.setStyleSheet(
-            """
-            QComboBox {
-                background-color: #404040;
-                border: 1px solid #555;
-                border-radius: 4px;
-                padding: 5px;
-                color: #ffffff;
-                font-size: 12px;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 5px solid #ffffff;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #404040;
-                border: 1px solid #555;
-                color: #ffffff;
-                selection-background-color: #2196F3;
-            }
-        """
-        )
-
-        thread_layout.addWidget(thread_label)
-        thread_layout.addWidget(self.thread_combo)
-        thread_layout.addStretch()
-
-        # Batch size for batched method
-        batch_layout = QHBoxLayout()
-        batch_label = QLabel("Batch Size:")
-        batch_label.setStyleSheet("color: #ffffff; font-size: 12px;")
-
-        self.batch_combo = QComboBox()
-        self.batch_combo.addItems(["50", "100", "150"])
-        self.batch_combo.setCurrentText("1000")  # Default to 1000
-        self.batch_combo.setStyleSheet(
-            """
-            QComboBox {
-                background-color: #404040;
-                border: 1px solid #555;
-                border-radius: 4px;
-                padding: 5px;
-                color: #ffffff;
-                font-size: 12px;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 5px solid #ffffff;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #404040;
-                border: 1px solid #555;
-                color: #ffffff;
-                selection-background-color: #2196F3;
-            }
-        """
-        )
-
-        batch_layout.addWidget(batch_label)
-        batch_layout.addWidget(self.batch_combo)
-        batch_layout.addStretch()
-
-        performance_layout.addLayout(method_layout)
-        performance_layout.addLayout(thread_layout)
-        performance_layout.addLayout(batch_layout)
-        performance_group.setLayout(performance_layout)
-
         # Progress bar
         self.focal_progress = QProgressBar()
         self.focal_progress.setStyleSheet(
@@ -647,7 +495,6 @@ class MainWindow(QWidget):
         # Add controls to left panel
         left_panel.addWidget(self.select_folder_button)
         left_panel.addWidget(self.analyze_button)
-        left_panel.addWidget(performance_group)
         left_panel.addWidget(self.focal_progress)
         left_panel.addWidget(self.loading_label)
         left_panel.addWidget(self.focal_status_label)
@@ -722,7 +569,7 @@ class MainWindow(QWidget):
         tab_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Create tab buttons
-        self.createTabButton("Add Border", 0, tab_layout)
+        self.createTabButton("Border Control", 0, tab_layout)
         self.createTabButton("Optimal Prime", 1, tab_layout)
 
         # Window controls
@@ -1626,21 +1473,11 @@ class MainWindow(QWidget):
         self.select_folder_button.setEnabled(False)
         self.focal_status_label.setText("Analyzing images... Please wait.")
 
-        # Get performance options from UI
-        method = (
-            "batched"
-            if self.method_combo.currentText().startswith("Batched")
-            else "fast"
-        )
-        max_workers = int(self.thread_combo.currentText())
-        batch_size = int(self.batch_combo.currentText())
-
-        # Create and start worker thread
+        # Create and start worker thread with optimized defaults
         self.focal_worker = FocalLengthWorker(
             self.focal_length_folder,
-            method=method,
-            max_workers=max_workers,
-            batch_size=batch_size,
+            max_workers=4,
+            batch_size=100,
         )
         self.focal_worker.finished.connect(self.onFocalAnalysisComplete)
         self.focal_worker.error.connect(self.onFocalAnalysisError)
