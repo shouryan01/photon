@@ -1,14 +1,15 @@
 # photon
+### Utilities for Photographers
 
-![cropped](https://github.com/user-attachments/assets/2d3db094-76fe-4fe4-88e7-0a8f1a8b294f)
+<img src="https://github.com/user-attachments/assets/2d3db094-76fe-4fe4-88e7-0a8f1a8b294f" width="500"/>
 
-Utilities for Photographers
+
 
 ## Features
 
 - Add borders to images.
 - Select border color and width for each side.
-- Save and load border settings for difference workflows.
+- Save and load border settings for different workflows.
 - Batch apply edits to photos.
 - **Focal Length Analysis**: Analyze focal length distribution in your photo collections.
   - Use this to pick the best prime lens for your needs!
@@ -21,6 +22,12 @@ Utilities for Photographers
 - Presets for crops
 - "Polaroid" preset border sizes.
 
+## AI Features Planned
+- Duplicate image detection and organization
+- Face/subject detection, tagging and auto-organizing
+- Auto renaming of images
+
 ## Screenshots
 
-<img width="1203" alt="image" src="https://github.com/user-attachments/assets/5c5f737c-2125-445e-80a1-8f315108b5f6" />
+<img width="1246" height="846" alt="Screenshot 2025-07-12 at 4 58 06 PM" src="https://github.com/user-attachments/assets/a454156f-608e-4bfd-9cfb-068f87b118c4" />
+<img width="1246" height="846" alt="Screenshot 2025-07-12 at 4 58 31 PM" src="https://github.com/user-attachments/assets/310207db-3d24-40a1-938b-dcc62dbb0deb" />
