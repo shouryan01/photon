@@ -8,16 +8,37 @@ import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt6.QtCore import QPoint, QRect, QRectF, Qt, QThread, pyqtSignal
-from PyQt6.QtGui import (QBrush, QColor, QCursor, QImage, QPainter,
-                         QPainterPath, QPen, QPixmap)
-from PyQt6.QtWidgets import (QApplication, QColorDialog, QFileDialog, QFrame,
-                             QGridLayout, QGroupBox, QHBoxLayout, QLabel,
-                             QLineEdit, QMessageBox, QProgressBar, QPushButton,
-                             QSlider, QStackedWidget, QVBoxLayout, QWidget)
+from PyQt6.QtGui import (
+    QBrush,
+    QColor,
+    QCursor,
+    QImage,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+)
+from PyQt6.QtWidgets import (
+    QApplication,
+    QColorDialog,
+    QFileDialog,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QSlider,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from border import create_border_group
-from focal_length import (analyze_focal_lengths_batched,
-                          analyze_focal_lengths_parallel)
+from focal_length import analyze_focal_lengths_batched, analyze_focal_lengths_parallel
 
 # from crop import create_crop_group
 
@@ -1552,7 +1573,7 @@ class MainWindow(QWidget):
                 "right": self.right_border,
                 "color": self.border_color,
             },
-            max_workers=4  # Use 4 threads for parallel processing
+            max_workers=4,  # Use 4 threads for parallel processing
         )
         self.batch_worker.finished.connect(self.onBatchProcessingComplete)
         self.batch_worker.progress.connect(self.onBatchProgressUpdate)
@@ -1756,10 +1777,13 @@ class MainWindow(QWidget):
         # Get the RGBA buffer from the figure
         w, h = canvas.get_width_height()
         buf = np.frombuffer(canvas.buffer_rgba(), dtype=np.uint8)
-        buf.shape = (h, w, 3)
+        buf.shape = (h, w, 4)  # RGBA has 4 channels
+
+        # Convert RGBA to RGB by dropping the alpha channel
+        rgb_buf = buf[:, :, :3].copy()  # Make a copy to ensure contiguous memory
 
         # Convert to QImage and then QPixmap
-        q_image = QImage(buf.data, w, h, buf.strides[0], QImage.Format.Format_RGB888)
+        q_image = QImage(rgb_buf.tobytes(), w, h, w * 3, QImage.Format.Format_RGB888)
         pixmap = QPixmap.fromImage(q_image)
 
         # Scale to fit the widget while maintaining aspect ratio
