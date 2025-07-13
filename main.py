@@ -238,6 +238,11 @@ class MainWindow(QWidget):
         self.focal_length_folder = None
         self.focal_worker = None
 
+        # Shutter count analysis values
+        self.shutter_count_data = None
+        self.shutter_count_image_path = None
+        self.shutter_worker = None
+
         # Batch processing worker
         self.batch_worker = None
 
@@ -302,6 +307,7 @@ class MainWindow(QWidget):
         # Create tab content
         self.createMainTab()
         self.createFocalLengthTab()
+        self.createShutterCountTab()
 
         main_layout.addWidget(self.stacked_widget)
         main_container.setLayout(main_layout)
@@ -672,6 +678,127 @@ class MainWindow(QWidget):
         focal_widget.setLayout(focal_layout)
         self.stacked_widget.addWidget(focal_widget)
 
+    def createShutterCountTab(self):
+        # Content area for Shutter Count Analysis tab
+        shutter_widget = QWidget()
+        shutter_widget.setObjectName("shutterWidget")
+        shutter_widget.setStyleSheet(
+            """
+            #shutterWidget {
+                background-color: #2b2b2b;
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
+            }
+        """
+        )
+
+        shutter_layout = QHBoxLayout()
+        shutter_layout.setContentsMargins(20, 20, 20, 20)
+
+        # Left panel for controls
+        left_panel_widget = QWidget()
+        left_panel_widget.setFixedWidth(350)
+        left_panel = QVBoxLayout()
+        left_panel.setContentsMargins(0, 0, 0, 0)
+
+        # Image selection button
+        self.select_shutter_image_button = QPushButton("Select Image", self)
+        self.select_shutter_image_button.setStyleSheet(
+            """
+            QPushButton {
+                font-size: 16px;
+                padding: 12px 24px;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+            """
+        )
+        self.select_shutter_image_button.clicked.connect(self.selectShutterCountImage)
+
+        # Progress bar
+        self.shutter_progress = QProgressBar()
+        self.shutter_progress.setStyleSheet(
+            """
+            QProgressBar {
+                border: 2px solid #404040;
+                border-radius: 5px;
+                text-align: center;
+                background-color: #1e1e1e;
+                color: #ffffff;
+            }
+            QProgressBar::chunk {
+                background-color: #4CAF50;
+                border-radius: 3px;
+            }
+        """
+        )
+        self.shutter_progress.setVisible(False)
+
+        # Loading label
+        self.shutter_loading_label = QLabel("")
+        self.shutter_loading_label.setStyleSheet(
+            """
+            color: #4CAF50;
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+        """
+        )
+        self.shutter_loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.shutter_loading_label.setVisible(False)
+
+        # Status label
+        self.shutter_status_label = QLabel("No image selected")
+        self.shutter_status_label.setStyleSheet("color: #ffffff; font-size: 12px;")
+
+        # Add controls to left panel
+        left_panel.addWidget(self.select_shutter_image_button)
+        left_panel.addWidget(self.shutter_progress)
+        left_panel.addWidget(self.shutter_loading_label)
+        left_panel.addWidget(self.shutter_status_label)
+        left_panel.addStretch()
+
+        left_panel_widget.setLayout(left_panel)
+
+        # Right panel for shutter count display
+        right_panel = QVBoxLayout()
+
+        # Shutter count display widget
+        self.shutter_count_display = QLabel()
+        self.shutter_count_display.setMinimumSize(400, 300)
+        self.shutter_count_display.setStyleSheet(
+            """
+            QLabel {
+                border: 2px dashed #555;
+                border-radius: 8px;
+                background-color: #1e1e1e;
+                color: #4CAF50;
+                font-size: 72px;
+                font-weight: bold;
+            }
+        """
+        )
+        self.shutter_count_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.shutter_count_display.setText("--")
+
+        right_panel.addWidget(self.shutter_count_display)
+
+        # Add panels to content layout
+        shutter_layout.addWidget(left_panel_widget)
+        shutter_layout.addLayout(right_panel, 1)
+
+        shutter_widget.setLayout(shutter_layout)
+        self.stacked_widget.addWidget(shutter_widget)
+
     def createTitleBar(self):
         title_bar = QWidget()
         title_bar.setObjectName("titleBar")
@@ -713,6 +840,7 @@ class MainWindow(QWidget):
         # Create tab buttons
         self.createTabButton("Border Control", 0, tab_layout)
         self.createTabButton("Optimal Prime", 1, tab_layout)
+        self.createTabButton("Shutter Count", 2, tab_layout)
 
         # Window controls
         controls_layout = QHBoxLayout()
@@ -1795,6 +1923,91 @@ class MainWindow(QWidget):
 
         self.histogram_widget.setPixmap(scaled_pixmap)
 
+    def selectShutterCountImage(self):
+        """Select a single image for shutter count analysis."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Image for Shutter Count Analysis",
+            "",
+            "Image Files (*.jpg *.jpeg *.png *.tiff *.tif *.cr2 *.nef *.arw *.dng)",
+        )
+
+        if file_path:
+            self.shutter_count_image_path = file_path
+            # Show only the filename for display
+            display_name = os.path.basename(file_path)
+            if len(display_name) > 30:
+                display_name = "..." + display_name[-27:]
+            self.shutter_status_label.setText(f"Selected: {display_name}")
+
+            # Clear the shutter count display
+            self.shutter_count_display.setText("--")
+
+            # Automatically start processing
+            self.analyzeShutterCounts()
+
+    def analyzeShutterCounts(self):
+        """Get shutter count from the selected image using exiftool."""
+        if not self.shutter_count_image_path:
+            return
+
+        # Show progress
+        self.shutter_progress.setVisible(True)
+        self.shutter_progress.setRange(0, 0)  # Indeterminate progress
+        self.shutter_loading_label.setText("Reading shutter count...")
+        self.shutter_loading_label.setVisible(True)
+        self.select_shutter_image_button.setEnabled(False)
+        self.shutter_status_label.setText("Reading EXIF data... Please wait.")
+
+        try:
+            # Use exiftool to get shutter count
+            import subprocess
+
+            # Run exiftool command
+            result = subprocess.run(
+                ["exiftool", "-ShutterCount", self.shutter_count_image_path],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            if result.returncode == 0:
+                # Parse the output
+                output_lines = result.stdout.strip().split("\n")
+                shutter_count = None
+
+                for line in output_lines:
+                    if "Shutter Count" in line:
+                        # Extract the number from the line
+                        parts = line.split(":")
+                        if len(parts) >= 2:
+                            shutter_count = parts[1].strip()
+                            break
+
+                if shutter_count:
+                    # Display the shutter count in the large number display
+                    self.shutter_count_display.setText(shutter_count)
+                else:
+                    self.shutter_count_display.setText("N/A")
+            else:
+                error_msg = result.stderr.strip() if result.stderr else "Unknown error"
+                self.shutter_count_display.setText("ERROR")
+
+        except subprocess.TimeoutExpired:
+            self.shutter_count_display.setText("TIMEOUT")
+        except FileNotFoundError:
+            self.shutter_count_display.setText("NO EXIFTOOL")
+        except Exception:
+            self.shutter_count_display.setText("ERROR")
+
+        # Hide progress and re-enable buttons
+        self.shutter_progress.setVisible(False)
+        self.shutter_loading_label.setVisible(False)
+        self.select_shutter_image_button.setEnabled(True)
+        self.shutter_status_label.setText(
+            f"Selected: {os.path.basename(self.shutter_count_image_path)}"
+        )
+
     def closeEvent(self, event):
         """Clean up worker threads when closing the window."""
         if self.focal_worker and self.focal_worker.isRunning():
@@ -1803,6 +2016,9 @@ class MainWindow(QWidget):
         if self.batch_worker and self.batch_worker.isRunning():
             self.batch_worker.quit()
             self.batch_worker.wait()
+        if self.shutter_worker and self.shutter_worker.isRunning():
+            self.shutter_worker.quit()
+            self.shutter_worker.wait()
         event.accept()
 
 
