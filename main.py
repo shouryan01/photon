@@ -8,37 +8,16 @@ import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt6.QtCore import QPoint, QRect, QRectF, Qt, QThread, pyqtSignal
-from PyQt6.QtGui import (
-    QBrush,
-    QColor,
-    QCursor,
-    QImage,
-    QPainter,
-    QPainterPath,
-    QPen,
-    QPixmap,
-)
-from PyQt6.QtWidgets import (
-    QApplication,
-    QColorDialog,
-    QFileDialog,
-    QFrame,
-    QGridLayout,
-    QGroupBox,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QMessageBox,
-    QProgressBar,
-    QPushButton,
-    QSlider,
-    QStackedWidget,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtGui import (QBrush, QColor, QCursor, QImage, QPainter,
+                         QPainterPath, QPen, QPixmap)
+from PyQt6.QtWidgets import (QApplication, QColorDialog, QFileDialog, QFrame,
+                             QGridLayout, QGroupBox, QHBoxLayout, QLabel,
+                             QLineEdit, QMessageBox, QProgressBar, QPushButton,
+                             QSlider, QStackedWidget, QVBoxLayout, QWidget)
 
 from border import create_border_group
-from focal_length import analyze_focal_lengths_batched, analyze_focal_lengths_parallel
+from focal_length import (analyze_focal_lengths_batched,
+                          analyze_focal_lengths_parallel)
 
 # from crop import create_crop_group
 
@@ -66,6 +45,145 @@ class FocalLengthWorker(QThread):
             self.finished.emit(result)
         except Exception as e:
             self.error.emit(str(e))
+
+
+class BatchWorker(QThread):
+    """Worker thread for batch image processing."""
+
+    finished = pyqtSignal(int, int)  # success_count, error_count
+    progress = pyqtSignal(int)  # current progress
+    error = pyqtSignal(str)
+
+    def __init__(self, image_paths, output_dir, border_settings, max_workers=4):
+        super().__init__()
+        self.image_paths = image_paths
+        self.output_dir = output_dir
+        self.border_settings = border_settings
+        self.max_workers = max_workers
+
+    def run(self):
+        try:
+            if len(self.image_paths) > 10 and self.max_workers > 1:
+                # Use parallel processing for larger batches
+                self._process_parallel()
+            else:
+                # Use sequential processing for smaller batches
+                self._process_sequential()
+
+        except Exception as e:
+            self.error.emit(str(e))
+
+    def _process_sequential(self):
+        """Process images sequentially."""
+        success_count = 0
+        error_count = 0
+
+        for i, image_path in enumerate(self.image_paths):
+            try:
+                # Load image
+                image = cv2.imread(image_path)
+                if image is None:
+                    error_count += 1
+                    continue
+
+                # Apply border
+                bordered_image = cv2.copyMakeBorder(
+                    image,
+                    self.border_settings["top"],
+                    self.border_settings["bottom"],
+                    self.border_settings["left"],
+                    self.border_settings["right"],
+                    cv2.BORDER_CONSTANT,
+                    value=self.border_settings["color"],
+                )
+
+                # Generate output filename
+                base_name = os.path.splitext(os.path.basename(image_path))[0]
+                extension = os.path.splitext(image_path)[1]
+                output_path = os.path.join(
+                    self.output_dir, f"{base_name}_bordered{extension}"
+                )
+
+                # Save image
+                cv2.imwrite(output_path, bordered_image)
+                success_count += 1
+
+            except Exception as e:
+                error_count += 1
+                print(f"Error processing {image_path}: {str(e)}")
+
+            # Emit progress
+            self.progress.emit(i + 1)
+
+        # Emit final results
+        self.finished.emit(success_count, error_count)
+
+    def _process_parallel(self):
+        """Process images in parallel using ThreadPoolExecutor."""
+        import threading
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        success_count = 0
+        error_count = 0
+        processed_count = 0
+        lock = threading.Lock()
+
+        def process_single_image(image_path):
+            nonlocal success_count, error_count
+            try:
+                # Load image
+                image = cv2.imread(image_path)
+                if image is None:
+                    with lock:
+                        error_count += 1
+                    return False
+
+                # Apply border
+                bordered_image = cv2.copyMakeBorder(
+                    image,
+                    self.border_settings["top"],
+                    self.border_settings["bottom"],
+                    self.border_settings["left"],
+                    self.border_settings["right"],
+                    cv2.BORDER_CONSTANT,
+                    value=self.border_settings["color"],
+                )
+
+                # Generate output filename
+                base_name = os.path.splitext(os.path.basename(image_path))[0]
+                extension = os.path.splitext(image_path)[1]
+                output_path = os.path.join(
+                    self.output_dir, f"{base_name}_bordered{extension}"
+                )
+
+                # Save image
+                cv2.imwrite(output_path, bordered_image)
+
+                with lock:
+                    success_count += 1
+                return True
+
+            except Exception as e:
+                print(f"Error processing {image_path}: {str(e)}")
+                with lock:
+                    error_count += 1
+                return False
+
+        # Process images in parallel
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # Submit all tasks
+            future_to_path = {
+                executor.submit(process_single_image, path): path
+                for path in self.image_paths
+            }
+
+            # Process completed tasks
+            for future in as_completed(future_to_path):
+                processed_count += 1
+                self.progress.emit(processed_count)
+
+        # Emit final results
+        self.finished.emit(success_count, error_count)
 
 
 class MainWindow(QWidget):
@@ -98,6 +216,9 @@ class MainWindow(QWidget):
         self.focal_length_data = None
         self.focal_length_folder = None
         self.focal_worker = None
+
+        # Batch processing worker
+        self.batch_worker = None
 
         # Window dragging
         self.dragging = False
@@ -1285,6 +1406,34 @@ class MainWindow(QWidget):
         self.process_batch_button.clicked.connect(self.processBatch)
         self.process_batch_button.setEnabled(False)
 
+        # Cancel batch button
+        self.cancel_batch_button = QPushButton("Cancel")
+        self.cancel_batch_button.setStyleSheet(
+            """
+            QPushButton {
+                font-size: 14px;
+                padding: 10px 20px;
+                background-color: #f44336;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #d32f2f;
+            }
+            QPushButton:pressed {
+                background-color: #b71c1c;
+            }
+            QPushButton:disabled {
+                background-color: #555;
+                color: #888;
+            }
+        """
+        )
+        self.cancel_batch_button.clicked.connect(self.cancelBatchProcessing)
+        self.cancel_batch_button.setVisible(False)
+
         # Progress bar
         self.batch_progress = QProgressBar()
         self.batch_progress.setStyleSheet(
@@ -1312,9 +1461,14 @@ class MainWindow(QWidget):
         self.output_dir_label = QLabel("No output directory selected")
         self.output_dir_label.setStyleSheet("color: #ffffff; font-size: 12px;")
 
+        # Create horizontal layout for process and cancel buttons
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(self.process_batch_button)
+        button_layout.addWidget(self.cancel_batch_button)
+
         batch_layout.addWidget(self.select_images_button)
         batch_layout.addWidget(self.select_output_button)
-        batch_layout.addWidget(self.process_batch_button)
+        batch_layout.addLayout(button_layout)
         batch_layout.addWidget(self.batch_progress)
         batch_layout.addWidget(self.batch_status_label)
         batch_layout.addWidget(self.output_dir_label)
@@ -1384,53 +1538,33 @@ class MainWindow(QWidget):
         self.select_images_button.setEnabled(False)
         self.select_output_button.setEnabled(False)
         self.process_batch_button.setEnabled(False)
+        self.cancel_batch_button.setVisible(True)
 
         # Process images
-        success_count = 0
-        error_count = 0
+        # Create and start worker thread with optimized defaults
+        self.batch_worker = BatchWorker(
+            self.batch_images,
+            self.batch_output_dir,
+            {
+                "top": self.top_border,
+                "bottom": self.bottom_border,
+                "left": self.left_border,
+                "right": self.right_border,
+                "color": self.border_color,
+            },
+            max_workers=4  # Use 4 threads for parallel processing
+        )
+        self.batch_worker.finished.connect(self.onBatchProcessingComplete)
+        self.batch_worker.progress.connect(self.onBatchProgressUpdate)
+        self.batch_worker.error.connect(self.onBatchProcessingError)
+        self.batch_worker.start()
 
-        for i, image_path in enumerate(self.batch_images):
-            try:
-                # Load image
-                image = cv2.imread(image_path)
-                if image is None:
-                    error_count += 1
-                    continue
-
-                # Apply border
-                bordered_image = cv2.copyMakeBorder(
-                    image,
-                    self.top_border,
-                    self.bottom_border,
-                    self.left_border,
-                    self.right_border,
-                    cv2.BORDER_CONSTANT,
-                    value=self.border_color,
-                )
-
-                # Generate output filename
-                base_name = os.path.splitext(os.path.basename(image_path))[0]
-                extension = os.path.splitext(image_path)[1]
-                output_path = os.path.join(
-                    self.batch_output_dir, f"{base_name}_bordered{extension}"
-                )
-
-                # Save image
-                cv2.imwrite(output_path, bordered_image)
-                success_count += 1
-
-            except Exception as e:
-                error_count += 1
-                print(f"Error processing {image_path}: {str(e)}")
-
-            # Update progress
-            self.batch_progress.setValue(i + 1)
-            QApplication.processEvents()  # Allow UI updates
-
-        # Show completion message
+    def onBatchProcessingComplete(self, success_count, error_count):
+        """Handle completion of batch processing."""
         self.batch_progress.setVisible(False)
         self.select_images_button.setEnabled(True)
         self.select_output_button.setEnabled(True)
+        self.cancel_batch_button.setVisible(False)
         self.processing_batch = False
 
         # Show results
@@ -1442,6 +1576,39 @@ class MainWindow(QWidget):
         QMessageBox.information(self, "Batch Processing Complete", message)
 
         # Update button state
+        self.updateBatchButtonState()
+
+    def onBatchProgressUpdate(self, value):
+        """Update the progress bar during batch processing."""
+        self.batch_progress.setValue(value)
+        QApplication.processEvents()  # Allow UI updates
+
+    def onBatchProcessingError(self, error_message):
+        """Handle errors in batch processing."""
+        QMessageBox.critical(
+            self,
+            "Error",
+            f"An error occurred during batch processing:\n{error_message}",
+        )
+        self.batch_progress.setVisible(False)
+        self.select_images_button.setEnabled(True)
+        self.select_output_button.setEnabled(True)
+        self.process_batch_button.setEnabled(True)
+        self.cancel_batch_button.setVisible(False)
+        self.processing_batch = False
+        self.updateBatchButtonState()
+
+    def cancelBatchProcessing(self):
+        """Cancel the current batch processing operation."""
+        if self.batch_worker and self.batch_worker.isRunning():
+            self.batch_worker.quit()
+            self.batch_worker.wait()
+
+        self.batch_progress.setVisible(False)
+        self.select_images_button.setEnabled(True)
+        self.select_output_button.setEnabled(True)
+        self.cancel_batch_button.setVisible(False)
+        self.processing_batch = False
         self.updateBatchButtonState()
 
     def selectFocalLengthFolder(self):
@@ -1588,7 +1755,7 @@ class MainWindow(QWidget):
 
         # Get the RGBA buffer from the figure
         w, h = canvas.get_width_height()
-        buf = np.frombuffer(canvas.tostring_rgb(), dtype=np.uint8)
+        buf = np.frombuffer(canvas.buffer_rgba(), dtype=np.uint8)
         buf.shape = (h, w, 3)
 
         # Convert to QImage and then QPixmap
@@ -1609,6 +1776,9 @@ class MainWindow(QWidget):
         if self.focal_worker and self.focal_worker.isRunning():
             self.focal_worker.quit()
             self.focal_worker.wait()
+        if self.batch_worker and self.batch_worker.isRunning():
+            self.batch_worker.quit()
+            self.batch_worker.wait()
         event.accept()
 
 

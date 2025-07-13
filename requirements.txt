@@ -1,4 +1,4 @@
-PyQt6==6.9.1
-opencv-python
+PyQt6
 numpy
 matplotlib
+pyinstaller
