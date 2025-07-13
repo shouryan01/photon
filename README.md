@@ -3,7 +3,9 @@
 
 <img src="https://github.com/user-attachments/assets/2d3db094-76fe-4fe4-88e7-0a8f1a8b294f" width="500"/>
 
-
+## Requirements
+- [ExifTool](https://exiftool.org)
+This website has a Windows installer. On Mac, it is also available through `brew install exiftool`
 
 ## Features
 
