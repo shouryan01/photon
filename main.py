@@ -2,11 +2,6 @@ import json
 import os
 import sys
 
-import cv2
-import matplotlib.pyplot as plt
-import numpy as np
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
 from PyQt6.QtCore import QPoint, QRect, QRectF, Qt, QThread, pyqtSignal
 from PyQt6.QtGui import (
     QBrush,
@@ -96,6 +91,8 @@ class BatchWorker(QThread):
 
     def _process_sequential(self):
         """Process images sequentially."""
+        import cv2
+
         success_count = 0
         error_count = 0
 
@@ -150,6 +147,8 @@ class BatchWorker(QThread):
         lock = threading.Lock()
 
         def process_single_image(image_path):
+            import cv2
+
             nonlocal success_count, error_count
             try:
                 # Load image
@@ -838,9 +837,9 @@ class MainWindow(QWidget):
         tab_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Create tab buttons
-        self.createTabButton("Border Control", 0, tab_layout)
-        self.createTabButton("Optimal Prime", 1, tab_layout)
-        self.createTabButton("Shutter Count", 2, tab_layout)
+        # self.createTabButton("Border Control", 0, tab_layout)
+        # self.createTabButton("Optimal Prime", 1, tab_layout)
+        # self.createTabButton("Shutter Count", 2, tab_layout)
 
         # Window controls
         controls_layout = QHBoxLayout()
@@ -1067,6 +1066,8 @@ class MainWindow(QWidget):
 
     def loadImage(self, image_path):
         # Load image with OpenCV
+        import cv2
+
         self.original_image = cv2.imread(image_path)
         if self.original_image is None:
             return
@@ -1101,6 +1102,8 @@ class MainWindow(QWidget):
     def updateBorder(self):
         if self.original_image is None:
             return
+
+        import cv2
 
         # Apply border using OpenCV to the original full-resolution image
         bordered_image = cv2.copyMakeBorder(
@@ -1162,6 +1165,8 @@ class MainWindow(QWidget):
     def downloadImage(self):
         if self.original_image is None:
             return
+
+        import cv2
 
         # Apply border using OpenCV to the original full-resolution image
         bordered_image = cv2.copyMakeBorder(
@@ -1852,6 +1857,10 @@ class MainWindow(QWidget):
         """Create a histogram from the focal length data."""
         if not self.focal_length_data or not self.focal_length_data["focal_lengths"]:
             return
+
+        import numpy as np
+        from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+        from matplotlib.figure import Figure
 
         # Create matplotlib figure with dark theme
         fig = Figure(figsize=(10, 6), facecolor="#2b2b2b")

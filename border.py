@@ -38,7 +38,7 @@ def create_border_group(main_window):
     top_label.setFixedWidth(50)
     top_label.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 12px;")
     main_window.top_slider = QSlider(Qt.Orientation.Horizontal)
-    main_window.top_slider.setRange(0, 500)
+    main_window.top_slider.setRange(0, 1000)
     main_window.top_slider.setValue(0)
     main_window.top_slider.setStyleSheet(
         """
@@ -62,7 +62,7 @@ def create_border_group(main_window):
     )
     main_window.top_slider.valueChanged.connect(main_window.onSliderChanged)
     main_window.top_text_box = QLineEdit("0")
-    main_window.top_text_box.setValidator(QIntValidator(0, 500))
+    main_window.top_text_box.setValidator(QIntValidator(0, 1000))
     main_window.top_text_box.setFixedWidth(60)
     main_window.top_text_box.setStyleSheet(
         """
@@ -89,7 +89,7 @@ def create_border_group(main_window):
     bottom_label.setFixedWidth(50)
     bottom_label.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 12px;")
     main_window.bottom_slider = QSlider(Qt.Orientation.Horizontal)
-    main_window.bottom_slider.setRange(0, 500)
+    main_window.bottom_slider.setRange(0, 1000)
     main_window.bottom_slider.setValue(0)
     main_window.bottom_slider.setStyleSheet(
         """
@@ -113,7 +113,7 @@ def create_border_group(main_window):
     )
     main_window.bottom_slider.valueChanged.connect(main_window.onSliderChanged)
     main_window.bottom_text_box = QLineEdit("0")
-    main_window.bottom_text_box.setValidator(QIntValidator(0, 500))
+    main_window.bottom_text_box.setValidator(QIntValidator(0, 1000))
     main_window.bottom_text_box.setFixedWidth(60)
     main_window.bottom_text_box.setStyleSheet(
         """
@@ -140,7 +140,7 @@ def create_border_group(main_window):
     left_label.setFixedWidth(50)
     left_label.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 12px;")
     main_window.left_slider = QSlider(Qt.Orientation.Horizontal)
-    main_window.left_slider.setRange(0, 500)
+    main_window.left_slider.setRange(0, 1000)
     main_window.left_slider.setValue(0)
     main_window.left_slider.setStyleSheet(
         """
@@ -164,7 +164,7 @@ def create_border_group(main_window):
     )
     main_window.left_slider.valueChanged.connect(main_window.onSliderChanged)
     main_window.left_text_box = QLineEdit("0")
-    main_window.left_text_box.setValidator(QIntValidator(0, 500))
+    main_window.left_text_box.setValidator(QIntValidator(0, 1000))
     main_window.left_text_box.setFixedWidth(60)
     main_window.left_text_box.setStyleSheet(
         """
@@ -191,7 +191,7 @@ def create_border_group(main_window):
     right_label.setFixedWidth(50)
     right_label.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 12px;")
     main_window.right_slider = QSlider(Qt.Orientation.Horizontal)
-    main_window.right_slider.setRange(0, 500)
+    main_window.right_slider.setRange(0, 1000)
     main_window.right_slider.setValue(0)
     main_window.right_slider.setStyleSheet(
         """
@@ -215,7 +215,7 @@ def create_border_group(main_window):
     )
     main_window.right_slider.valueChanged.connect(main_window.onSliderChanged)
     main_window.right_text_box = QLineEdit("0")
-    main_window.right_text_box.setValidator(QIntValidator(0, 500))
+    main_window.right_text_box.setValidator(QIntValidator(0, 1000))
     main_window.right_text_box.setFixedWidth(60)
     main_window.right_text_box.setStyleSheet(
         """
