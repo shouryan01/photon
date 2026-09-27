@@ -1,10 +1,18 @@
+# Xcode & Swift Package Manager
+.build/
+.swiftpm/
 build/
-dist/
-venv_build/
-.venv/
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+DerivedData/
+*.xcodeproj/
+*.xcworkspace/
+
+# macOS system files
 .DS_Store
+
+# Legacy Python ignores
+*.pyc
+__pycache__/
+.venv/
+venv_build/
+dist/
+.pyinstaller_cache/
