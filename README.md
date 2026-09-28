@@ -20,6 +20,18 @@
 
 ---
 
+## Screenshots
+
+<img width="1212" height="852" alt="Screenshot 2026-09-28 at 8 11 42 AM" src="https://github.com/user-attachments/assets/b084f2d1-14e5-488c-817e-9dd78c23c4bc" />
+
+<img width="1212" height="852" alt="Screenshot 2026-09-28 at 8 14 34 AM" src="https://github.com/user-attachments/assets/ab56cce4-6274-4756-b233-43df0a35b1bf" />
+
+<img width="1212" height="852" alt="Screenshot 2026-09-28 at 8 12 48 AM" src="https://github.com/user-attachments/assets/822d3ff9-80e7-45af-b7e2-b91eaf59f58f" />
+
+<img width="1212" height="852" alt="Screenshot 2026-09-28 at 8 14 06 AM" src="https://github.com/user-attachments/assets/12973ba0-5590-4a82-a3fd-9bcd7ee9efc9" />
+
+---
+
 ## Highlights
 
 - ⚡ **Instant Startup**: Launches in under 30 milliseconds with zero runtime overhead or heavy interpreter delays.
